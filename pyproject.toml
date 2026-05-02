@@ -1,0 +1,16 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "codegent"
+version = "0.1.0"
+description = "Trace the evolutionary lineage of code across git history."
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "codegent contributors" }]
+license = { text = "MIT" }
+dependencies = []
+
+[project.scripts]
+codegent = "codegent.cli:main"
