@@ -126,3 +126,11 @@ mailmap configuration. Without it, history reports preserve recorded identities.
 counts, additions, deletions, binary changes, and first/last author dates per
 identity. Sorting supports `commits`, `churn`, and `name`. All history filters apply.
 Churn measures changed lines, not quality or current ownership.
+
+### Repository hotspots
+
+`codegent hotspots src --sort churn --min-commits 2 --limit 20 --json` ranks
+historical paths by changed lines or commit count. Omit `src` to scan the repository.
+History date, author, ref, first-parent, and commit-limit options apply. Binary
+changes are counted separately. Historical names remain separate across renames;
+churn is a triage signal, not evidence of defects.

@@ -2,6 +2,19 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_hotspots_aggregate_per_file_and_support_directory_scope(self):
+        self.write("src/hot.py", "one\n")
+        self.write("cold.py", "cold\n")
+        self.commit()
+        self.write("src/hot.py", "one\ntwo\n")
+        self.commit()
+        report = self.payload("hotspots", "--min-commits", "2")
+        self.assertEqual([row["path"] for row in report["files"]], ["src/hot.py"])
+        self.assertEqual(report["files"][0]["commits"], 2)
+        self.assertEqual(report["files"][0]["additions"], 2)
+        self.assertEqual(self.payload("hotspots", "src")["matching_files"], 1)
+        self.assertEqual(self.payload("hotspots", "missing")["files"], [])
+
     def test_author_report_aggregates_multiple_commits_per_identity(self):
         self.write("file.py", "one\n")
         self.commit()

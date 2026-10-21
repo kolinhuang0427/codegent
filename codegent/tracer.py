@@ -144,7 +144,14 @@ class GitTracer:
         except GitError as exc:
             raise GitError(f"invalid commit/ref: {ref!r}") from exc
 
-    def trace_path(
+    def trace_path(self, path: str, ref: str = "HEAD", **options: Any) -> Bloodline:
+        return self._read_history(path, ref, **options)
+
+    def repository_history(self, path: str = ".", ref: str = "HEAD", **options: Any) -> Bloodline:
+        options.pop("follow", None)
+        return self._read_history(path, ref, follow=None, allow_empty=True, **options)
+
+    def _read_history(
         self,
         path: str,
         ref: str = "HEAD",
@@ -153,7 +160,8 @@ class GitTracer:
         since: str | None = None,
         until: str | None = None,
         author: str | None = None,
-        follow: bool = True,
+        follow: bool | None = True,
+        allow_empty: bool = False,
         first_parent: bool = False,
     ) -> Bloodline:
         if max_commits is not None and max_commits <= 0:
@@ -188,7 +196,7 @@ class GitTracer:
             selection["first_parent"] = True
         if follow:
             args.append("--follow")
-        else:
+        elif follow is False:
             selection["follow"] = False
         if author:
             selection["author"] = author
@@ -206,7 +214,7 @@ class GitTracer:
         truncated = max_commits is not None and len(newest_first) > max_commits
         if truncated:
             newest_first = newest_first[:max_commits]
-        if not newest_first:
+        if not newest_first and not allow_empty:
             raise PathNotFoundError(
                 f"no matching history for {path!r}; check the path, ref, and filters"
             )
@@ -219,7 +227,7 @@ class GitTracer:
             commits=commits,
             repo=self.root(),
             requested_ref=ref,
-            followed_renames=follow,
+            followed_renames=bool(follow),
             max_commits=max_commits,
             truncated=truncated,
             shallow=shallow,
@@ -282,6 +290,7 @@ class GitTracer:
                 node.deletions += item["deletions"]
                 node.binary = node.binary or item["binary"]
                 node.files.append(item["path"])
+                node.changes.append(item)
                 if "renamed_from" in item:
                     node.renamed_from = item["renamed_from"]
                     node.renamed_to = item["renamed_to"]

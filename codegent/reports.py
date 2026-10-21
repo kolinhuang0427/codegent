@@ -40,3 +40,35 @@ def render_authors(report: dict[str, Any]) -> str:
     lines.extend(f"{row['commits']:7}  {row['churn']:5}  {row['author']}" for row in report["authors"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
+
+
+def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1) -> dict[str, Any]:
+    files: dict[str, dict[str, Any]] = {}
+    for commit in history.commits:
+        for item in commit.changes:
+            row = files.setdefault(item["path"], {
+                "path": item["path"], "commits": 0, "additions": 0, "deletions": 0, "binary_changes": 0,
+            })
+            row["commits"] += 1
+            row["additions"] += item["additions"]
+            row["deletions"] += item["deletions"]
+            row["binary_changes"] += int(item["binary"])
+    for row in files.values():
+        row["churn"] = row["additions"] + row["deletions"]
+    rows = sorted((row for row in files.values() if row["commits"] >= min_commits),
+                  key=lambda row: (-row[sort], row["path"]))
+    return {
+        "repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
+        "history_complete": history.history_complete, "warnings": history.warnings,
+        "selection": history.selection, "scanned_commits": len(history.commits),
+        "matching_files": len(rows), "files": rows[:limit], "sort": sort,
+        "path_policy": "historical names are counted separately across renames",
+    }
+
+
+def render_hotspots(report: dict[str, Any]) -> str:
+    lines = [f"Hotspots: {report['path']}", "Churn  Commits  Path"]
+    lines.extend(f"{row['churn']:5}  {row['commits']:7}  {row['path']}" for row in report["files"])
+    lines.extend(f"Warning: {warning}" for warning in report["warnings"])
+    lines.append(report["path_policy"])
+    return "\n".join(lines) + "\n"
