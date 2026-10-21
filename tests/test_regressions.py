@@ -5,6 +5,17 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_wide_and_combining_text_fits_boxes_and_no_color_presence_is_respected(self):
+        import unicodedata
+        self.write("file.py")
+        self.commit("说明" * 100, env={"GIT_AUTHOR_NAME": "维护者" + "A\u0301" * 100})
+        result = self.cli("trace", "file.py", env={"NO_COLOR": "", "CLICOLOR_FORCE": "1"})
+        self.assertNotIn("\x1b", result.stdout)
+        boxes = [line for line in result.stdout.splitlines() if line.lstrip().startswith(("╭", "│", "╰"))]
+        widths = [sum(0 if unicodedata.combining(c) else 2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in line) for line in boxes]
+        self.assertTrue(boxes)
+        self.assertEqual(set(widths), {78})
+
     def test_repository_control_characters_are_inert_in_text_and_preserved_in_json(self):
         name = "file\x1b[2J.py"
         self.write(name)

@@ -4,7 +4,34 @@ from __future__ import annotations
 from dataclasses import fields, is_dataclass, replace
 from functools import wraps
 import unicodedata
+import re
 from typing import Any
+
+
+def character_width(char: str) -> int:
+    if unicodedata.combining(char) or unicodedata.category(char) in {"Mn", "Me", "Cf"}:
+        return 0
+    return 2 if unicodedata.east_asian_width(char) in {"W", "F"} else 1
+
+
+def display_width(text: str) -> int:
+    plain = re.sub(r"\x1b\[[0-9;]*m", "", text)
+    return sum(character_width(char) for char in plain)
+
+
+def truncate_cells(text: str, limit: int) -> str:
+    if display_width(text) <= limit:
+        return text
+    budget = max(0, limit - 3)
+    result: list[str] = []
+    used = 0
+    for char in text:
+        width = character_width(char)
+        if used + width > budget:
+            break
+        result.append(char)
+        used += width
+    return "".join(result).rstrip() + "." * min(3, limit)
 
 
 def escape_text(text: str) -> str:
