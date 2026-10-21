@@ -4,6 +4,16 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_paths_resolve_from_repo_directory_and_allow_absolute_files(self):
+        self.write("src/file.py")
+        self.commit()
+        result = self.payload("trace", "file.py", "--repo", str(self.repo / "src"))
+        self.assertEqual(result["path"], "src/file.py")
+        self.assertEqual(self.payload("trace", str(self.repo / "src/file.py"))["path"], "src/file.py")
+        outside = self.cli("trace", str(self.repo.parent / "outside.py"))
+        self.assertEqual(outside.returncode, 1)
+        self.assertIn("outside the repository", outside.stderr)
+
     def test_diff_preserves_unusual_names_and_rename_stats(self):
         old, new = " old\t中文.py ", "new\nname.py"
         self.write(old)

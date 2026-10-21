@@ -48,7 +48,8 @@ class GitTracer:
     """Trace file history through git using subprocess calls."""
 
     def __init__(self, repo: str = ".") -> None:
-        self.repo = os.path.abspath(repo)
+        self.repo = os.path.realpath(os.path.expanduser(repo))
+        self.path_base = self.repo
 
     def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
         cmd = ["git", "--literal-pathspecs", "-C", self.repo, *args]
@@ -78,6 +79,7 @@ class GitTracer:
             raise GitRepositoryError(f"not a git repository: {self.repo}") from exc
         if inside != "true":
             raise GitRepositoryError(f"not a git repository: {self.repo}")
+        self.repo = self.git(["rev-parse", "--show-toplevel"]).rstrip("\n")
 
     def has_commits(self) -> bool:
         self.ensure_repository()
@@ -85,7 +87,15 @@ class GitTracer:
 
     def root(self) -> str:
         self.ensure_repository()
-        return self.git(["rev-parse", "--show-toplevel"]).strip()
+        return self.repo
+
+    def normalize_path(self, path: str) -> str:
+        self.ensure_repository()
+        absolute = os.path.abspath(os.path.join(self.path_base, path))
+        absolute = os.path.join(os.path.realpath(os.path.dirname(absolute)), os.path.basename(absolute))
+        if os.path.commonpath([self.repo, absolute]) != self.repo:
+            raise GitError(f"path is outside the repository: {path!r}")
+        return os.path.relpath(absolute, self.repo).replace(os.sep, "/")
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
         args = ["rev-list", "--reverse", self.resolve_ref(ref)]
@@ -117,6 +127,8 @@ class GitTracer:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
+
+        path = self.normalize_path(path)
 
         args = [
             "log",

@@ -75,3 +75,5 @@ Binary file changes are detected from git numstat output and are reported withou
 
 `--max-commits` must be a positive integer; zero and negative limits are rejected.
 Paths are literal filenames, including brackets and other Git pathspec metacharacters.
+Relative paths resolve from the directory passed to `--repo`. Absolute paths inside
+that repository are also accepted, including paths deleted from the current tree.
