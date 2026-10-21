@@ -89,11 +89,22 @@ class GitTracer:
         return self.git(["rev-parse", "--show-toplevel"]).strip()
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
-        args = ["rev-list", "--reverse", ref]
+        args = ["rev-list", "--reverse", self.resolve_ref(ref)]
         if path:
             args.extend(["--", path])
         output = self.git(args)
         return [line for line in output.splitlines() if line]
+
+    def resolve_ref(self, ref: str) -> str:
+        """Accept a single commit-ish, never a revision range or Git option."""
+        try:
+            return self.git([
+                "rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}",
+            ]).strip()
+        except GitExecutionError:
+            raise
+        except GitError as exc:
+            raise GitError(f"invalid commit/ref: {ref!r}") from exc
 
     def trace_path(
         self,
@@ -118,7 +129,7 @@ class GitTracer:
         ]
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits}")
-        args.extend([ref, "--", path])
+        args.extend([self.resolve_ref(ref), "--", path])
 
         output = self.git(args)
         newest_first = self._parse_log(output)
@@ -143,9 +154,10 @@ class GitTracer:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
-        stat = self.git(["diff", "--stat", "--find-renames", commit_a, commit_b])
-        numstat = self.git(["diff", "--numstat", "--find-renames", commit_a, commit_b])
-        name_status = self.git(["diff", "--name-status", "--find-renames", commit_a, commit_b])
+        base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
+        stat = self.git(["diff", "--stat", "--find-renames", base, target, "--"])
+        numstat = self.git(["diff", "--numstat", "--find-renames", base, target, "--"])
+        name_status = self.git(["diff", "--name-status", "--find-renames", base, target, "--"])
         files = self._merge_diff_outputs(numstat, name_status)
         return DiffLineage(
             repo=self.root(),
