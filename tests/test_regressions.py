@@ -5,6 +5,16 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_git_timeout_is_bounded_and_readable(self):
+        fake_git = self.repo / "git"
+        fake_git.write_text("#!/bin/sh\nexec /bin/sleep 5\n")
+        fake_git.chmod(0o755)
+        result = self.cli("trace", "file.py", "--timeout", "0.05", "--json", env={"PATH": str(self.repo)})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("timed out", json.loads(result.stderr)["error"])
+        invalid = self.cli("trace", "file.py", "--timeout", "nan")
+        self.assertIn("positive finite", invalid.stderr)
+
     def test_shallow_and_limited_history_do_not_claim_a_confirmed_origin(self):
         self.write("file.py")
         self.commit("first")

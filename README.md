@@ -110,3 +110,6 @@ side-branch commits. These reports describe the selected integration history.
 `--rename-threshold 80` sets Git's rename similarity percentage (1-100, default 50)
 for both history and diff. Rename detection is heuristic; stricter values can stop
 a lineage at a heavily edited rename. JSON records the selected threshold.
+
+`--timeout 10` limits each Git subprocess to a positive, finite number of seconds
+(default 30). Timed-out operations return a readable error, including in JSON mode.

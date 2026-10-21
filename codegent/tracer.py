@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import math
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -60,9 +61,12 @@ class DiffLineage:
 class GitTracer:
     """Trace file history through git using subprocess calls."""
 
-    def __init__(self, repo: str = ".", *, rename_threshold: int = 50) -> None:
+    def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0) -> None:
         if not 1 <= rename_threshold <= 100:
             raise GitError("rename threshold must be between 1 and 100")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise GitError("timeout must be a positive finite number")
+        self.timeout = timeout
         self.rename_threshold = rename_threshold
         self.repo = os.path.realpath(os.path.expanduser(repo))
         self.path_base = self.repo
@@ -76,7 +80,10 @@ class GitTracer:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=False,
+                timeout=self.timeout,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise GitExecutionError(f"git timed out after {self.timeout:g} seconds") from exc
         except OSError as exc:
             raise GitExecutionError(f"cannot run git: {exc.strerror or exc}") from exc
         if check and result.returncode != 0:

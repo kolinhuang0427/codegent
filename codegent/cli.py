@@ -27,6 +27,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for each Git process (default: 30)")
     common.add_argument("--rename-threshold", type=int, default=argparse.SUPPRESS, help="Rename similarity percentage, 1-100 (default: 50)")
     common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
@@ -99,7 +100,7 @@ def main(argv: list[str] | None = None) -> int:
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -111,7 +112,7 @@ def _history_options(args: argparse.Namespace) -> dict[str, Any]:
 
 
 def _tracer(args: argparse.Namespace) -> GitTracer:
-    return GitTracer(args.repo, rename_threshold=args.rename_threshold)
+    return GitTracer(args.repo, rename_threshold=args.rename_threshold, timeout=args.timeout)
 
 
 def _history(args: argparse.Namespace):
