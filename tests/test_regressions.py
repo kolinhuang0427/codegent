@@ -4,6 +4,17 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_truncation_requires_an_additional_matching_commit(self):
+        self.write("file.py")
+        self.commit("first")
+        self.write("file.py", "changed\n")
+        self.commit("second")
+        self.assertFalse(self.payload("trace", "file.py", "--max-commits", "2")["truncated"])
+        limited = self.payload("trace", "file.py", "--max-commits", "1")
+        self.assertTrue(limited["truncated"])
+        self.assertEqual(limited["total_commits"], 1)
+        self.assertEqual(limited["latest"]["message"], "second")
+
     def test_paths_resolve_from_repo_directory_and_allow_absolute_files(self):
         self.write("src/file.py")
         self.commit()

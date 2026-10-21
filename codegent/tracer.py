@@ -142,11 +142,14 @@ class GitTracer:
             "--find-renames",
         ]
         if max_commits is not None and max_commits > 0:
-            args.append(f"--max-count={max_commits}")
+            args.append(f"--max-count={max_commits + 1}")
         args.extend([self.resolve_ref(ref), "--", path])
 
         output = self.git(args)
         newest_first = self._parse_log(output)
+        truncated = max_commits is not None and len(newest_first) > max_commits
+        if truncated:
+            newest_first = newest_first[:max_commits]
         if not newest_first:
             raise PathNotFoundError(
                 f"no history found for {path!r}; check the path or choose an older commit"
@@ -161,7 +164,7 @@ class GitTracer:
             requested_ref=ref,
             followed_renames=True,
             max_commits=max_commits,
-            truncated=max_commits is not None and len(commits) >= max_commits,
+            truncated=truncated,
         )
 
     def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:
