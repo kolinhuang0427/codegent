@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 from dataclasses import dataclass
 from typing import Any
@@ -158,9 +157,9 @@ class GitTracer:
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
-        stat = self.git(["diff", "--stat", "--find-renames", base, target, "--"])
-        numstat = self.git(["diff", "--numstat", "--find-renames", base, target, "--"])
-        name_status = self.git(["diff", "--name-status", "--find-renames", base, target, "--"])
+        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", "--find-renames", base, target, "--"])
+        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", "--find-renames", base, target, "--"])
+        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", "--find-renames", base, target, "--"])
         files = self._merge_diff_outputs(numstat, name_status)
         return DiffLineage(
             repo=self.root(),
@@ -212,37 +211,6 @@ class GitTracer:
             commits.append(node)
         return commits
 
-    def _looks_like_numstat(self, line: str) -> bool:
-        parts = line.split("\t")
-        if len(parts) < 3:
-            return False
-        return (parts[0].isdigit() or parts[0] == "-") and (
-            parts[1].isdigit() or parts[1] == "-"
-        )
-
-    def _parse_numstat(self, line: str) -> tuple[int, int, str, bool]:
-        parts = line.split("\t")
-        added_raw, deleted_raw = parts[0], parts[1]
-        file_path = "\t".join(parts[2:])
-        binary = added_raw == "-" or deleted_raw == "-"
-        added = 0 if binary else int(added_raw)
-        deleted = 0 if binary else int(deleted_raw)
-        return added, deleted, self._clean_rename_path(file_path), binary
-
-    def _clean_rename_path(self, path: str) -> str:
-        cleaned = path.strip()
-        if " => " not in cleaned:
-            return cleaned
-        prefix = ""
-        suffix = ""
-        body = cleaned
-        if "{" in cleaned and "}" in cleaned:
-            prefix = cleaned.split("{", 1)[0]
-            body = cleaned.split("{", 1)[1].rsplit("}", 1)[0]
-            suffix = cleaned.rsplit("}", 1)[1]
-        left, right = [part.strip() for part in body.split(" => ", 1)]
-        return f"{prefix}{right}{suffix}"
-
     def _assign_roles(self, commits: list[CommitNode]) -> None:
         if not commits:
             return
@@ -263,39 +231,29 @@ class GitTracer:
 
     def _merge_diff_outputs(self, numstat: str, name_status: str) -> list[dict[str, Any]]:
         stats_by_path: dict[str, dict[str, Any]] = {}
-        for line in numstat.splitlines():
-            if not self._looks_like_numstat(line):
-                continue
-            added, deleted, path, binary = self._parse_numstat(line)
-            stats_by_path[path] = {
-                "path": path,
-                "additions": added,
-                "deletions": deleted,
-                "binary": binary,
-                "status": "modified",
-            }
+        tokens = numstat.split("\0")
+        index = 0
+        while index < len(tokens) and tokens[index]:
+            item, index = self._numstat_entry(tokens, index)
+            item["status"] = "modified"
+            stats_by_path[item["path"]] = item
 
-        for line in name_status.splitlines():
-            parts = line.split("\t")
-            if not parts:
-                continue
-            status = parts[0]
-            if status.startswith("R") and len(parts) >= 3:
-                path = parts[2]
-                entry = stats_by_path.setdefault(
-                    path,
-                    {"path": path, "additions": 0, "deletions": 0, "binary": False},
-                )
-                entry["status"] = "renamed"
-                entry["renamed_from"] = parts[1]
-                entry["renamed_to"] = parts[2]
-            elif len(parts) >= 2:
-                path = parts[1]
-                entry = stats_by_path.setdefault(
-                    path,
-                    {"path": path, "additions": 0, "deletions": 0, "binary": False},
-                )
-                entry["status"] = self._status_name(status)
+        tokens = name_status.split("\0")
+        index = 0
+        while index < len(tokens) and tokens[index]:
+            status, path = tokens[index:index + 2]
+            index += 2
+            old_path = None
+            if status.startswith(("R", "C")):
+                old_path, path = path, tokens[index]
+                index += 1
+            entry = stats_by_path.setdefault(path, {
+                "path": path, "additions": 0, "deletions": 0, "binary": False,
+            })
+            entry["status"] = self._status_name(status)
+            if old_path is not None:
+                entry["renamed_from"] = old_path
+                entry["renamed_to"] = path
         return list(stats_by_path.values())
 
     def _status_name(self, status: str) -> str:
@@ -303,6 +261,7 @@ class GitTracer:
             "A": "added",
             "M": "modified",
             "D": "deleted",
+            "R": "renamed",
             "C": "copied",
             "T": "type-changed",
         }.get(status[:1], status.lower())

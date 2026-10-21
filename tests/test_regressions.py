@@ -4,6 +4,19 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_diff_preserves_unusual_names_and_rename_stats(self):
+        old, new = " old\t中文.py ", "new\nname.py"
+        self.write(old)
+        base = self.commit()
+        self.git("mv", old, new)
+        self.write(new, "one\ntwo\nthree\nfour\n")
+        self.commit()
+        item, = self.payload("diff", base, "HEAD")["files"]
+        self.assertEqual(item["path"], new)
+        self.assertEqual(item["renamed_from"], old)
+        self.assertEqual(item["status"], "renamed")
+        self.assertEqual(item["additions"], 1)
+
     def test_history_preserves_unusual_filenames_and_renames(self):
         old = " 中文 \told\n{a => b}.py "
         new = " 新 \tnew\n{b => c}.py "
