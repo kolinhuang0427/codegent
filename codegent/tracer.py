@@ -134,6 +134,7 @@ class GitTracer:
         max_commits: int | None = 10000,
         since: str | None = None,
         until: str | None = None,
+        author: str | None = None,
     ) -> Bloodline:
         if max_commits is not None and max_commits <= 0:
             raise GitError("max_commits must be greater than zero or None")
@@ -161,6 +162,9 @@ class GitTracer:
             "--numstat",
             "--find-renames",
         ]
+        if author:
+            selection["author"] = author
+            args.extend(["--fixed-strings", f"--author={author}"])
         if since:
             args.append(f"--since-as-filter={selection['since']}")
         if until:

@@ -2,6 +2,16 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_author_filter_is_literal_and_marks_the_selection(self):
+        self.write("file.py")
+        self.commit("first")
+        self.write("file.py", "second\n")
+        self.commit("second", env={"GIT_AUTHOR_NAME": "Second [Author]", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        result = self.payload("trace", "file.py", "--author", "[Author]")
+        self.assertEqual(result["total_commits"], 1)
+        self.assertEqual(result["latest"]["message"], "second")
+        self.assertFalse(result["origin_confirmed"])
+
     def test_date_window_selects_commits_and_discloses_partial_history(self):
         self.write("file.py")
         self.commit("January", env={"GIT_AUTHOR_DATE": "2026-01-01T12:00:00Z", "GIT_COMMITTER_DATE": "2026-01-01T12:00:00Z"})

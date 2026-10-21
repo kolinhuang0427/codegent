@@ -97,3 +97,6 @@ Use `--since 2026-01-01 --until 2026-02-01T23:59:59Z` to select commits by Git's
 committer date. Values must be ISO dates or datetimes; omitted timezones mean UTC,
 and date-only values mean midnight. Filtered results describe the selection and
 do not claim a confirmed origin.
+
+`--author "name or email"` selects a literal, case-sensitive author substring.
+It can be combined with date windows and commit limits.
