@@ -44,6 +44,7 @@ class DiffLineage:
     commit_b: str
     files: list[dict[str, Any]]
     stat: str
+    rename_threshold: int = 50
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,13 +53,17 @@ class DiffLineage:
             "commit_b": self.commit_b,
             "files": self.files,
             "stat": self.stat,
+            "rename_threshold": self.rename_threshold,
         }
 
 
 class GitTracer:
     """Trace file history through git using subprocess calls."""
 
-    def __init__(self, repo: str = ".") -> None:
+    def __init__(self, repo: str = ".", *, rename_threshold: int = 50) -> None:
+        if not 1 <= rename_threshold <= 100:
+            raise GitError("rename threshold must be between 1 and 100")
+        self.rename_threshold = rename_threshold
         self.repo = os.path.realpath(os.path.expanduser(repo))
         self.path_base = self.repo
 
@@ -161,7 +166,7 @@ class GitTracer:
             "--no-ext-diff",
             "--no-textconv",
             "--numstat",
-            "--find-renames",
+            f"--find-renames={self.rename_threshold}%",
         ]
         if first_parent:
             args.append("--first-parent")
@@ -204,6 +209,7 @@ class GitTracer:
             truncated=truncated,
             shallow=shallow,
             selection=selection,
+            rename_threshold=self.rename_threshold,
         )
 
     def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:
@@ -211,9 +217,9 @@ class GitTracer:
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
-        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", "--find-renames", base, target, "--"])
-        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", "--find-renames", base, target, "--"])
-        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", "--find-renames", base, target, "--"])
+        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", f"--find-renames={self.rename_threshold}%", base, target, "--"])
+        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--"])
+        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--"])
         files = self._merge_diff_outputs(numstat, name_status)
         return DiffLineage(
             repo=self.root(),
@@ -221,6 +227,7 @@ class GitTracer:
             commit_b=commit_b,
             files=files,
             stat=stat.rstrip(),
+            rename_threshold=self.rename_threshold,
         )
 
     def _numstat_entry(self, tokens: list[str], index: int) -> tuple[dict[str, Any], int]:

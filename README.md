@@ -106,3 +106,7 @@ names. JSON and text reports disclose this restricted history scope.
 
 `--first-parent` follows the integration branch through merges, excluding individual
 side-branch commits. These reports describe the selected integration history.
+
+`--rename-threshold 80` sets Git's rename similarity percentage (1-100, default 50)
+for both history and diff. Rename detection is heuristic; stricter values can stop
+a lineage at a heavily edited rename. JSON records the selected threshold.

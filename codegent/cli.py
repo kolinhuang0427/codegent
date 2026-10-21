@@ -27,6 +27,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--rename-threshold", type=int, default=argparse.SUPPRESS, help="Rename similarity percentage, 1-100 (default: 50)")
     common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
     common.add_argument("--author", default=argparse.SUPPRESS, help="Literal author name/email substring")
@@ -98,7 +99,7 @@ def main(argv: list[str] | None = None) -> int:
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -109,11 +110,15 @@ def _history_options(args: argparse.Namespace) -> dict[str, Any]:
     return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "follow": args.follow, "first_parent": args.first_parent}
 
 
+def _tracer(args: argparse.Namespace) -> GitTracer:
+    return GitTracer(args.repo, rename_threshold=args.rename_threshold)
+
+
 def _history(args: argparse.Namespace):
     positional_ref = getattr(args, "commit_hash", None)
     if positional_ref and args.ref != "HEAD" and positional_ref != args.ref:
         raise GitError("choose either a positional commit or --ref, not conflicting refs")
-    return GitTracer(args.repo).trace_path(
+    return _tracer(args).trace_path(
         args.path, positional_ref or args.ref, **_history_options(args),
     )
 
@@ -147,7 +152,7 @@ def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
 
 
 def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    diff = GitTracer(args.repo).diff_lineage(args.commit_a, args.commit_b)
+    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b)
     if args.json_output:
         return diff.to_dict()
     return render_diff_lineage(diff, color=color)

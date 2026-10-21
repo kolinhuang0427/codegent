@@ -2,6 +2,18 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_rename_similarity_is_configurable_for_history_and_diff(self):
+        self.write("old.py", "".join(f"line {i}\n" for i in range(10)))
+        base = self.commit()
+        self.git("mv", "old.py", "new.py")
+        self.write("new.py", "".join(f"line {i}\n" for i in range(7)) + "changed a\nchanged b\nchanged c\n")
+        self.commit()
+        permissive = self.payload("trace", "new.py", "--rename-threshold", "30")
+        strict = self.payload("trace", "new.py", "--rename-threshold", "100")
+        self.assertEqual(permissive["total_commits"], 2)
+        self.assertEqual(strict["total_commits"], 1)
+        self.assertEqual(len(self.payload("diff", base, "HEAD", "--rename-threshold", "100")["files"]), 2)
+
     def test_first_parent_excludes_side_branch_commits(self):
         self.write("file.py")
         self.commit("base")
