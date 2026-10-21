@@ -13,7 +13,7 @@ def render_trace(bloodline: Bloodline, *, color: bool = True) -> str:
     lines = [
         "",
         f"  {heading('Tracing lineage for:', color)} {bloodline.path}",
-        f"  {muted('Follows renames:', color)} yes",
+        f"  {muted('Follows renames:', color)} {'yes' if bloodline.followed_renames else 'no'}",
         "",
         render_family_tree(bloodline, color=color),
         "",

@@ -2,6 +2,16 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_no_follow_stops_before_the_previous_filename(self):
+        self.write("old.py")
+        self.commit()
+        self.git("mv", "old.py", "new.py")
+        self.commit()
+        result = self.payload("trace", "new.py", "--no-follow")
+        self.assertEqual(result["total_commits"], 1)
+        self.assertFalse(result["followed_renames"])
+        self.assertIn("Follows renames: no", self.cli("trace", "new.py", "--no-follow").stdout)
+
     def test_author_filter_is_literal_and_marks_the_selection(self):
         self.write("file.py")
         self.commit("first")

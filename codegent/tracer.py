@@ -135,6 +135,7 @@ class GitTracer:
         since: str | None = None,
         until: str | None = None,
         author: str | None = None,
+        follow: bool = True,
     ) -> Bloodline:
         if max_commits is not None and max_commits <= 0:
             raise GitError("max_commits must be greater than zero or None")
@@ -153,7 +154,6 @@ class GitTracer:
             raise GitError("--since must not be later than --until")
         args = [
             "log",
-            "--follow",
             "--date=iso-strict",
             "--format=%x00%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
             "-z",
@@ -162,6 +162,10 @@ class GitTracer:
             "--numstat",
             "--find-renames",
         ]
+        if follow:
+            args.append("--follow")
+        else:
+            selection["follow"] = False
         if author:
             selection["author"] = author
             args.extend(["--fixed-strings", f"--author={author}"])
@@ -191,7 +195,7 @@ class GitTracer:
             commits=commits,
             repo=self.root(),
             requested_ref=ref,
-            followed_renames=True,
+            followed_renames=follow,
             max_commits=max_commits,
             truncated=truncated,
             shallow=shallow,

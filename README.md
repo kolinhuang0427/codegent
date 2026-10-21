@@ -100,3 +100,6 @@ do not claim a confirmed origin.
 
 `--author "name or email"` selects a literal, case-sensitive author substring.
 It can be combined with date windows and commit limits.
+
+`--no-follow` inspects only the selected filename instead of following its earlier
+names. JSON and text reports disclose this restricted history scope.
