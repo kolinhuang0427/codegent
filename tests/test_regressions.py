@@ -4,6 +4,16 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_ancestry_uses_each_historical_filename(self):
+        self.write("old.py")
+        self.commit("original")
+        self.git("mv", "old.py", "middle.py")
+        self.commit("first rename")
+        self.git("mv", "middle.py", "new.py")
+        self.commit("second rename")
+        result = self.payload("ancestry", "new.py")
+        self.assertEqual([g["path"] for g in result["genes"]], ["old.py", "middle.py", "new.py"])
+
     def test_truncation_requires_an_additional_matching_commit(self):
         self.write("file.py")
         self.commit("first")

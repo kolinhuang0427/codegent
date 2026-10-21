@@ -173,6 +173,9 @@ class Bloodline:
         carried = 0
         genes: list[CodeGene] = []
         current_path = self.path
+        for commit in reversed(self.commits):
+            if commit.renamed_from:
+                current_path = commit.renamed_from
         for commit in self.commits:
             if commit.renamed_to:
                 current_path = commit.renamed_to
