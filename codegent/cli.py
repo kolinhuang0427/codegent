@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .tracer import GitError, GitTracer
-from .reports import author_report, render_authors, hotspot_report, render_hotspots
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -89,6 +89,11 @@ def build_parser() -> argparse.ArgumentParser:
     hotspots.add_argument("--limit", type=positive_int, default=20)
     hotspots.add_argument("--min-commits", type=positive_int, default=1)
     hotspots.set_defaults(handler=_cmd_hotspots)
+
+    owners = subparsers.add_parser("owners", parents=[common], help="Report surviving-line attribution at a commit")
+    owners.add_argument("path")
+    owners.add_argument("--lines", help="Inclusive START:END line range")
+    owners.set_defaults(handler=_cmd_owners)
 
     return parser
 
@@ -184,6 +189,11 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
     report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits)
     return report if args.json_output else render_hotspots(report)
+
+
+def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines)
+    return report if args.json_output else render_owners(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

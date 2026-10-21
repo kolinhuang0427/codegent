@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import math
+import re
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -235,6 +236,46 @@ class GitTracer:
             rename_threshold=self.rename_threshold,
             mailmap=self.mailmap,
         )
+
+    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None) -> dict[str, Any]:
+        path = self.normalize_path(path)
+        commit = self.resolve_ref(ref)
+        source = self.git(["cat-file", "blob", f"{commit}:{path}"])
+        if "\0" in source:
+            raise GitError("line ownership is unavailable for binary files")
+        file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
+        args = ["blame", "--line-porcelain"]
+        if lines:
+            match = re.fullmatch(r"([1-9][0-9]*):([1-9][0-9]*)", lines)
+            if not match:
+                raise GitError("--lines must be START:END with positive line numbers")
+            start, end = map(int, match.groups())
+            if start > end or end > file_lines:
+                raise GitError("line range is outside the file")
+            args.extend(["-L", f"{start},{end}"])
+        args.extend([commit, "--", path])
+        owners: dict[str, dict[str, Any]] = {}
+        current: dict[str, str] = {}
+        for line in self.git(args).split("\n"):
+            if re.match(r"^[0-9a-f]{40,64} ", line):
+                current = {"commit": line.split(" ", 1)[0]}
+            elif line.startswith("author "):
+                current["name"] = line[7:]
+            elif line.startswith("author-mail "):
+                current["email"] = line[12:].strip("<>")
+            elif line.startswith("\t"):
+                identity = f"{current['name']} <{current['email']}>"
+                row = owners.setdefault(identity, {"author": identity, "lines": 0, "commits": set()})
+                row["lines"] += 1
+                row["commits"].add(current["commit"])
+        total = sum(row["lines"] for row in owners.values())
+        rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"]))
+        for row in rows:
+            row["commits"] = sorted(row["commits"])
+            row["percentage"] = round(row["lines"] * 100 / total, 2) if total else 0
+        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
+                "file_lines": file_lines, "selected_lines": total, "line_range": lines,
+                "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
     def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:
         self.ensure_repository()

@@ -134,3 +134,11 @@ historical paths by changed lines or commit count. Omit `src` to scan the reposi
 History date, author, ref, first-parent, and commit-limit options apply. Binary
 changes are counted separately. Historical names remain separate across renames;
 churn is a triage signal, not evidence of defects.
+
+### Surviving-line attribution
+
+`codegent owners src/auth.py --ref HEAD --lines 10:40 --json` uses Git blame to
+report the authors of surviving text lines, percentages, and contributing commit
+IDs. The inclusive line range is optional. It reads committed content, excluding
+uncommitted edits. Identities follow Git blame's mailmap behavior. Binary files
+are rejected; this is line attribution, not code quality or legal ownership.

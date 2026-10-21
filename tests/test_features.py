@@ -2,6 +2,19 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_owners_reports_surviving_lines_at_a_committed_ref(self):
+        self.write("file.py")
+        original = self.commit()
+        self.write("file.py", "one\nSECOND\nthree\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        self.write("file.py", "uncommitted\n")
+        report = self.payload("owners", "file.py")
+        self.assertEqual([row["lines"] for row in report["owners"]], [2, 1])
+        selected = self.payload("owners", "file.py", "--lines", "2:2")
+        self.assertEqual(selected["owners"][0]["percentage"], 100)
+        self.assertIn("Second", selected["owners"][0]["author"])
+        self.assertEqual(len(self.payload("owners", "file.py", "--ref", original)["owners"]), 1)
+
     def test_hotspots_aggregate_per_file_and_support_directory_scope(self):
         self.write("src/hot.py", "one\n")
         self.write("cold.py", "cold\n")
