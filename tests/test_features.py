@@ -1,7 +1,25 @@
+import json
+
 from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_file_export_is_atomic_and_errors_preserve_existing_reports(self):
+        self.write("file.py")
+        self.commit()
+        target = self.repo / "report.json"
+        target.write_text("previous")
+        result = self.cli("trace", "file.py", "--json", "--output", str(target))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout, "")
+        saved = target.read_text()
+        self.assertEqual(json.loads(saved)["total_commits"], 1)
+        failed = self.cli("trace", "file.py", "--ref", "missing", "--output", str(target))
+        self.assertEqual(failed.returncode, 1)
+        self.assertEqual(target.read_text(), saved)
+        missing_dir = self.cli("trace", "file.py", "--output", str(self.repo / "missing/report"))
+        self.assertIn("cannot write report", missing_dir.stderr)
+
     def test_diff_summary_counts_text_binary_and_statuses(self):
         self.write("old.py", "old\n")
         base = self.commit()

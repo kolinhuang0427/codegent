@@ -4,6 +4,9 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
+import tempfile
 import sys
 from typing import Any, Callable
 
@@ -28,6 +31,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--output", default=argparse.SUPPRESS, help="Atomically write a report to a file; - means stdout")
     common.add_argument("--mailmap", action="store_true", default=argparse.SUPPRESS, help="Canonicalize history authors with .mailmap")
     common.add_argument("--ignore-whitespace", action="store_true", default=argparse.SUPPRESS, help="Ignore whitespace in textual change statistics")
     common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for each Git process (default: 30)")
@@ -104,26 +108,47 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _apply_defaults(args)
-    color = supports_color(args.no_color) and not args.json_output
+    color = supports_color(args.no_color) and not args.json_output and args.output in (None, "-")
     handler: Callable[[argparse.Namespace, bool], Any] = args.handler
     try:
         result = handler(args, color)
+        output = json.dumps(result, indent=2, sort_keys=True) if args.json_output else result
+        _write_output(output, args.output)
     except GitError as exc:
         return _error(str(exc), json_output=args.json_output, color=color)
     except KeyboardInterrupt:
         return _error("interrupted", json_output=args.json_output, color=color)
 
-    if args.json_output:
-        print(json.dumps(result, indent=2, sort_keys=True))
-    else:
-        print(result, end="" if result.endswith("\n") else "\n")
     return 0
+
+
+def _write_output(text: str, destination: str | None) -> None:
+    if not text.endswith("\n"):
+        text += "\n"
+    if destination in (None, "-"):
+        print(text, end="")
+        return
+    target = Path(destination).expanduser()
+    temporary: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                                         dir=target.parent, prefix=".codegent-", delete=False) as stream:
+            temporary = stream.name
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    except OSError as exc:
+        raise GitError(f"cannot write report to {str(target)!r}: {exc.strerror or exc}") from exc
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
