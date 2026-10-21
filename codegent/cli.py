@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+from functools import partial
 import sys
 from typing import Any, Callable
 
@@ -32,7 +33,18 @@ def positive_int(value: str) -> int:
     return number
 
 
-def build_parser() -> argparse.ArgumentParser:
+class ReportArgumentParser(argparse.ArgumentParser):
+    def __init__(self, *args, json_errors: bool = False, **kwargs):
+        self.json_errors = json_errors
+        super().__init__(*args, **kwargs)
+
+    def error(self, message: str) -> None:
+        if self.json_errors:
+            self.exit(2, json.dumps({"error": message}) + "\n")
+        super().error(message)
+
+
+def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--version", action="version", version=f"codegent {__version__}")
     common.add_argument("--output", default=argparse.SUPPRESS, help="Atomically write a report to a file; - means stdout")
@@ -58,12 +70,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="Maximum commits to inspect for history commands",
     )
 
-    parser = argparse.ArgumentParser(
+    parser = ReportArgumentParser(
+        json_errors=json_errors,
         prog="codegent",
         description="Trace the evolutionary lineage of code across git history.",
         parents=[common],
     )
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    subparsers = parser.add_subparsers(dest="command", required=True,
+                                       parser_class=partial(ReportArgumentParser, json_errors=json_errors))
 
     trace = subparsers.add_parser("trace", parents=[common], help="Trace a path's lineage")
     trace.add_argument("path", help="Path to trace")
@@ -111,9 +125,23 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
-    args = parser.parse_args(argv)
+    tokens = list(sys.argv[1:] if argv is None else argv)
+    option_tokens = tokens[:tokens.index("--")] if "--" in tokens else tokens
+    parser = build_parser(json_errors="--json" in option_tokens)
+    args = parser.parse_args(tokens)
+    provided = set(vars(args))
     _apply_defaults(args)
+    if args.json_output and args.markdown:
+        parser.error("choose one of --json and --markdown")
+    invalid = {
+        "diff": {"ref", "since", "until", "author", "follow", "first_parent", "max_commits", "mailmap"},
+        "owners": {"since", "until", "author", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
+        "hotspots": {"follow"},
+    }.get(args.command, set())
+    unsupported = sorted(provided & invalid)
+    if unsupported:
+        flags = ["--no-follow" if key == "follow" else "--" + key.replace("_", "-") for key in unsupported]
+        parser.error(f"{args.command} does not support {', '.join(flags)}")
     color = supports_color(args.no_color) and not (args.json_output or args.markdown) and args.output in (None, "-")
     handler: Callable[[argparse.Namespace, bool], Any] = args.handler
     try:
@@ -125,6 +153,15 @@ def main(argv: list[str] | None = None) -> int:
         else:
             output = result
         _write_output(output, args.output)
+    except BrokenPipeError:
+        # Redirect the descriptor so shutdown cannot flush the closed pipe again.
+        with open(os.devnull, "w") as sink:
+            os.dup2(sink.fileno(), sys.stdout.fileno())
+        return 0
+    except UnicodeError:
+        return _error("output cannot be encoded; use a UTF-8 terminal or --output FILE", json_output=args.json_output, color=False)
+    except OSError as exc:
+        return _error(str(exc), json_output=args.json_output, color=False)
     except GitError as exc:
         return _error(str(exc), json_output=args.json_output, color=color)
     except KeyboardInterrupt:
@@ -138,6 +175,7 @@ def _write_output(text: str, destination: str | None) -> None:
         text += "\n"
     if destination in (None, "-"):
         print(text, end="")
+        sys.stdout.flush()
         return
     target = Path(destination).expanduser()
     temporary: str | None = None

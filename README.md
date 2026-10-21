@@ -172,3 +172,25 @@ escaping, including unusual filenames.
 Trace boxes truncate long fields by terminal cells, accounting for CJK wide and
 combining characters. `--no-color`, presence of `NO_COLOR`, and `TERM=dumb`
 disable color, including when `CLICOLOR_FORCE` is set.
+
+### Automation and errors
+
+Exit codes: 0 for success (including a consumer closing a stdout pipe), 1 for
+Git/runtime/export errors, and 2 for invalid CLI arguments. `--json` also formats
+argument errors as JSON on stderr. Flags unsupported by a command are rejected
+instead of silently ignored. Global options can appear before or after the command.
+
+Owners reports disclose shallow-clone blame boundaries and support
+`--ignore-whitespace`. Git color, signature-display, and log-encoding settings
+cannot inject formatting into structured history parsing.
+
+CI exercises the real-repository suite on Linux and macOS with Python 3.10 and
+3.12, then builds a wheel and runs all eight installed commands in text, JSON,
+and Markdown outside the checkout. To repeat the installed-package check locally:
+
+```bash
+python -m pip wheel --no-deps --wheel-dir dist .
+python -m venv /tmp/codegent-check
+/tmp/codegent-check/bin/python -m pip install --no-deps dist/*.whl
+python scripts/smoke_installed.py /tmp/codegent-check/bin/codegent
+```

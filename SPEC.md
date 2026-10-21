@@ -64,3 +64,8 @@ Run `python -m unittest discover -v`. Integration scenarios create real Git
 repositories and invoke the CLI; they cover unusual paths, renames, shallow history,
 filters, merges, author aliases, blame attribution, and exports. Build/install
 validation must also exercise the installed console script outside the source tree.
+
+CLI argument errors use exit code 2, runtime errors use 1, and successful reports
+use 0. JSON mode applies to argument diagnostics as well as runtime diagnostics.
+Closed stdout pipes exit cleanly. Unsupported command/option combinations fail
+explicitly. Owners reports disclose shallow blame boundaries.
