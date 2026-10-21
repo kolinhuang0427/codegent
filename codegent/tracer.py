@@ -19,6 +19,10 @@ class GitRepositoryError(GitError):
     """Raised when a path is not a usable git repository."""
 
 
+class GitExecutionError(GitError):
+    """Raised when Git cannot be started."""
+
+
 class PathNotFoundError(GitError):
     """Raised when a traced path has no history."""
 
@@ -49,13 +53,16 @@ class GitTracer:
 
     def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
         cmd = ["git", "-C", self.repo, *args]
-        result = subprocess.run(
-            cmd,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=text,
-        )
+        try:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=text,
+            )
+        except OSError as exc:
+            raise GitExecutionError(f"cannot run git: {exc.strerror or exc}") from exc
         if check and result.returncode != 0:
             stderr = result.stderr.strip() if isinstance(result.stderr, str) else ""
             raise GitError(stderr or f"git command failed: {' '.join(cmd)}")
@@ -66,6 +73,8 @@ class GitTracer:
             raise GitRepositoryError(f"repository path does not exist: {self.repo}")
         try:
             inside = self.git(["rev-parse", "--is-inside-work-tree"]).strip()
+        except GitExecutionError:
+            raise
         except GitError as exc:
             raise GitRepositoryError(f"not a git repository: {self.repo}") from exc
         if inside != "true":
@@ -73,14 +82,7 @@ class GitTracer:
 
     def has_commits(self) -> bool:
         self.ensure_repository()
-        result = subprocess.run(
-            ["git", "-C", self.repo, "rev-parse", "--verify", "HEAD"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
-        )
-        return result.returncode == 0
+        return bool(self.git(["rev-parse", "--verify", "HEAD"], check=False).strip())
 
     def root(self) -> str:
         self.ensure_repository()
