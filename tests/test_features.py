@@ -2,6 +2,18 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_diff_path_filters_are_literal_and_repeatable(self):
+        self.write("src/[ab].py")
+        self.write("other.py")
+        base = self.commit()
+        self.write("src/[ab].py", "changed\n")
+        self.write("other.py", "other changed\n")
+        self.commit()
+        report = self.payload("diff", base, "HEAD", "--path", "src/[ab].py")
+        self.assertEqual([row["path"] for row in report["files"]], ["src/[ab].py"])
+        both = self.payload("diff", base, "HEAD", "--path", "src", "--path", "other.py")
+        self.assertEqual(len(both["files"]), 2)
+
     def test_owners_reports_surviving_lines_at_a_committed_ref(self):
         self.write("file.py")
         original = self.commit()
