@@ -59,14 +59,14 @@ class GitTracer:
                 check=False,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
-                text=text,
+                text=False,
             )
         except OSError as exc:
             raise GitExecutionError(f"cannot run git: {exc.strerror or exc}") from exc
         if check and result.returncode != 0:
-            stderr = result.stderr.strip() if isinstance(result.stderr, str) else ""
+            stderr = result.stderr.decode("utf-8", "replace").strip()
             raise GitError(stderr or f"git command failed: {' '.join(cmd)}")
-        return result.stdout if isinstance(result.stdout, str) else result.stdout.decode()
+        return result.stdout.decode("utf-8", "surrogateescape")
 
     def ensure_repository(self) -> None:
         if not os.path.isdir(self.repo):
@@ -123,9 +123,12 @@ class GitTracer:
             "log",
             "--follow",
             "--date=iso-strict",
-            "--format=%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%ad%x1f%s",
+            "--format=%x00%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
+            "-z",
+            "--no-ext-diff",
+            "--no-textconv",
             "--numstat",
-            "--summary",
+            "--find-renames",
         ]
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits}")
@@ -167,52 +170,45 @@ class GitTracer:
             stat=stat.rstrip(),
         )
 
+    def _numstat_entry(self, tokens: list[str], index: int) -> tuple[dict[str, Any], int]:
+        record = tokens[index].removeprefix("\n")
+        added, deleted, path = record.split("\t", 2)
+        binary = added == "-" or deleted == "-"
+        item: dict[str, Any] = {
+            "path": path, "additions": 0 if binary else int(added),
+            "deletions": 0 if binary else int(deleted), "binary": binary,
+        }
+        index += 1
+        if not path:
+            old, new = tokens[index:index + 2]
+            item.update(path=new, renamed_from=old, renamed_to=new)
+            index += 2
+        return item, index
+
     def _parse_log(self, output: str) -> list[CommitNode]:
+        # NUL delimiters preserve whitespace, Unicode and control characters in paths.
+        tokens = output.split("\0")
         commits: list[CommitNode] = []
-        for raw_block in output.split("\x1e"):
-            block = raw_block.strip("\n")
-            if not block.strip():
+        index = 0
+        while index < len(tokens):
+            if tokens[index] in ("", "\n"):
+                index += 1
                 continue
-            lines = block.splitlines()
-            header = lines[0]
-            parts = header.split("\x1f")
-            if len(parts) < 6:
-                continue
-            commit_hash, parents, author_name, author_email, date, message = parts[:6]
+            commit_hash, parents, author_name, author_email, date, message = tokens[index:index + 6]
+            index += 6
             node = CommitNode(
-                hash=commit_hash,
-                parents=[parent for parent in parents.split() if parent],
-                author_name=author_name,
-                author_email=author_email,
-                date=date,
-                message=message,
+                hash=commit_hash, parents=parents.split(), author_name=author_name,
+                author_email=author_email, date=date, message=message,
             )
-            rename_from: str | None = None
-            for line in lines[1:]:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                if self._looks_like_numstat(line):
-                    added, deleted, file_path, binary = self._parse_numstat(line)
-                    node.additions += added
-                    node.deletions += deleted
-                    node.binary = node.binary or binary
-                    if file_path and file_path not in node.files:
-                        node.files.append(file_path)
-                    continue
-                if stripped.startswith("rename from "):
-                    rename_from = stripped.removeprefix("rename from ").strip()
-                    node.renamed_from = rename_from
-                    continue
-                if stripped.startswith("rename to "):
-                    node.renamed_to = stripped.removeprefix("rename to ").strip()
-                    if rename_from:
-                        node.renamed_from = rename_from
-                    continue
-                match = re.match(r"rename\s+(.+?)\s+=>\s+(.+?)\s+\(\d+%\)", stripped)
-                if match:
-                    node.renamed_from = self._clean_rename_path(match.group(1))
-                    node.renamed_to = self._clean_rename_path(match.group(2))
+            while index < len(tokens) and tokens[index] not in ("", "\n"):
+                item, index = self._numstat_entry(tokens, index)
+                node.additions += item["additions"]
+                node.deletions += item["deletions"]
+                node.binary = node.binary or item["binary"]
+                node.files.append(item["path"])
+                if "renamed_from" in item:
+                    node.renamed_from = item["renamed_from"]
+                    node.renamed_to = item["renamed_to"]
             commits.append(node)
         return commits
 

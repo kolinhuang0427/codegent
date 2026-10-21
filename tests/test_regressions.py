@@ -4,6 +4,18 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_history_preserves_unusual_filenames_and_renames(self):
+        old = " 中文 \told\n{a => b}.py "
+        new = " 新 \tnew\n{b => c}.py "
+        self.write(old)
+        self.commit("original")
+        self.git("mv", old, new)
+        self.commit("rename")
+        result = self.payload("trace", new)
+        self.assertEqual(result["commits"][0]["files"], [old])
+        self.assertEqual(result["migrations"], [[old, new]])
+        self.assertEqual(result["commits"][1]["files"], [new])
+
     def test_git_pathspec_metacharacters_are_literal(self):
         self.write("[ab].py")
         self.commit("literal bracket filename")
