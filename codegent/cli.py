@@ -27,6 +27,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--ref", default=argparse.SUPPRESS, help="History tip (default: HEAD)")
     common.add_argument("--repo", default=argparse.SUPPRESS, help="Git repository path")
     common.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
@@ -46,7 +47,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     trace = subparsers.add_parser("trace", parents=[common], help="Trace a path's lineage")
     trace.add_argument("path", help="Path to trace")
-    trace.add_argument("commit_hash", nargs="?", default="HEAD", help="Commit/ref to trace from")
+    trace.add_argument("commit_hash", nargs="?", default=None, help="Commit/ref to trace from")
     trace.set_defaults(handler=_cmd_trace)
 
     ancestry = subparsers.add_parser("ancestry", parents=[common], help="Show direct ancestry")
@@ -90,6 +91,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _apply_defaults(args: argparse.Namespace) -> None:
+    if not hasattr(args, "ref"):
+        args.ref = "HEAD"
     if not hasattr(args, "repo"):
         args.repo = "."
     if not hasattr(args, "json_output"):
@@ -100,33 +103,38 @@ def _apply_defaults(args: argparse.Namespace) -> None:
         args.max_commits = 10000
 
 
-def _cmd_trace(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    bloodline = GitTracer(args.repo).trace_path(
-        args.path,
-        args.commit_hash,
-        max_commits=args.max_commits,
+def _history(args: argparse.Namespace):
+    positional_ref = getattr(args, "commit_hash", None)
+    if positional_ref and args.ref != "HEAD" and positional_ref != args.ref:
+        raise GitError("choose either a positional commit or --ref, not conflicting refs")
+    return GitTracer(args.repo).trace_path(
+        args.path, positional_ref or args.ref, max_commits=args.max_commits,
     )
+
+
+def _cmd_trace(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    bloodline = _history(args)
     if args.json_output:
         return bloodline.to_dict()
     return render_trace(bloodline, color=color)
 
 
 def _cmd_ancestry(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    bloodline = GitTracer(args.repo).trace_path(args.path, max_commits=args.max_commits)
+    bloodline = _history(args)
     if args.json_output:
         return bloodline.to_dict()
     return render_ancestry(bloodline, color=color)
 
 
 def _cmd_genemap(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    bloodline = GitTracer(args.repo).trace_path(args.path, max_commits=args.max_commits)
+    bloodline = _history(args)
     if args.json_output:
         return bloodline.to_dict()
     return render_genemap(bloodline, color=color)
 
 
 def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    bloodline = GitTracer(args.repo).trace_path(args.path, max_commits=args.max_commits)
+    bloodline = _history(args)
     if args.json_output:
         return bloodline.to_dict()
     return "\n" + render_bloodline_summary(bloodline, color=color) + "\n"

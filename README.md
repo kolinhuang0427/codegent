@@ -84,3 +84,9 @@ Shallow clones and commit limits are reported explicitly in every history view.
 JSON includes `history_complete`, `origin_confirmed`, `shallow`, and `warnings`.
 `origin` denotes the earliest observed commit; it is a confirmed origin only when
 `origin_confirmed` is true. Net line counts are estimates, not surviving-line attribution.
+
+### Historical tips
+
+All history commands accept `--ref <commit-or-tag>`, for example
+`codegent ancestry src/auth.py --ref v1.0.0`. Trace also retains its optional
+positional commit argument; conflicting positional and named refs are rejected.
