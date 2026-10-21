@@ -49,6 +49,16 @@ class DiffLineage:
     paths: list[str] = field(default_factory=list)
     rename_threshold: int = 50
 
+    @property
+    def summary(self) -> dict[str, Any]:
+        statuses: dict[str, int] = {}
+        for item in self.files:
+            status = item["status"]
+            statuses[status] = statuses.get(status, 0) + 1
+        return {"files": len(self.files), "additions": sum(item["additions"] for item in self.files),
+                "deletions": sum(item["deletions"] for item in self.files),
+                "binary_files": sum(int(item["binary"]) for item in self.files), "statuses": statuses}
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "repo": self.repo,
@@ -56,6 +66,7 @@ class DiffLineage:
             "commit_b": self.commit_b,
             "files": self.files,
             "stat": self.stat,
+            "summary": self.summary,
             "paths": self.paths,
             "rename_threshold": self.rename_threshold,
         }

@@ -146,3 +146,7 @@ are rejected; this is line attribution, not code quality or legal ownership.
 `codegent diff v1.0.0 HEAD --path src --path README.md` restricts a comparison to
 repeatable literal file/directory paths. Git detects renames within that selected
 path set; including both old and new paths preserves cross-directory comparisons.
+
+`diff --summary` emits aggregate file/status counts, text additions/deletions, and
+binary-file counts. Full diff JSON also includes the same `summary` object.
+Binary changes are counted as files, not invented line counts.

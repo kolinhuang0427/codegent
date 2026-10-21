@@ -2,6 +2,21 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_diff_summary_counts_text_binary_and_statuses(self):
+        self.write("old.py", "old\n")
+        base = self.commit()
+        self.git("rm", "old.py")
+        self.write("new.py", "new\nnewer\n")
+        (self.repo / "binary.dat").write_bytes(b"\0binary")
+        self.commit()
+        result = self.payload("diff", base, "HEAD", "--summary")
+        summary = result["summary"]
+        self.assertEqual(summary["files"], 3)
+        self.assertEqual(summary["additions"], 2)
+        self.assertEqual(summary["deletions"], 1)
+        self.assertEqual(summary["binary_files"], 1)
+        self.assertEqual(summary["statuses"], {"added": 2, "deleted": 1})
+
     def test_diff_path_filters_are_literal_and_repeatable(self):
         self.write("src/[ab].py")
         self.write("other.py")
