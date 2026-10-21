@@ -4,6 +4,18 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_markdown_export_escapes_repository_content(self):
+        self.write("file.py")
+        self.commit("fix | <script>alert(1)</script>")
+        result = self.cli("trace", "file.py", "--markdown")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("# codegent trace", result.stdout)
+        self.assertIn("\\| &lt;script&gt;", result.stdout)
+        self.assertNotIn("<script>", result.stdout)
+        self.assertNotIn("\x1b", result.stdout)
+        for command in ("authors", "owners"):
+            self.assertEqual(self.cli(command, "file.py", "--markdown").returncode, 0)
+
     def test_file_export_is_atomic_and_errors_preserve_existing_reports(self):
         self.write("file.py")
         self.commit()

@@ -157,3 +157,7 @@ Binary changes are counted as files, not invented line counts.
 replacement. Successful exports replace existing files; failed report generation
 preserves them. Parent directories must exist. File exports disable ANSI colors.
 Omit `--output` or use `--output -` for stdout.
+
+`--markdown --output report.md` exports any report as portable Markdown tables,
+including history warnings. Repository text is escaped for HTML and table syntax.
+Choose one of `--markdown` and `--json`.
