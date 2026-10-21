@@ -2,6 +2,20 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_first_parent_excludes_side_branch_commits(self):
+        self.write("file.py")
+        self.commit("base")
+        self.git("checkout", "-b", "feature")
+        self.write("file.py", "feature\n")
+        feature = self.commit("side branch")
+        self.git("checkout", "main")
+        self.write("other.py")
+        self.commit("main work")
+        self.git("merge", "--no-ff", "feature", "-m", "integrate")
+        result = self.payload("trace", "file.py", "--first-parent")
+        self.assertNotIn(feature, [c["hash"] for c in result["commits"]])
+        self.assertTrue(result["selection"]["first_parent"])
+
     def test_no_follow_stops_before_the_previous_filename(self):
         self.write("old.py")
         self.commit()

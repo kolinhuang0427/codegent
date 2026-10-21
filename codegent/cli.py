@@ -27,6 +27,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
     common.add_argument("--author", default=argparse.SUPPRESS, help="Literal author name/email substring")
     common.add_argument("--since", default=argparse.SUPPRESS, help="Include commits since an ISO date (UTC if unspecified)")
@@ -97,7 +98,7 @@ def main(argv: list[str] | None = None) -> int:
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -105,7 +106,7 @@ def _apply_defaults(args: argparse.Namespace) -> None:
 
 
 def _history_options(args: argparse.Namespace) -> dict[str, Any]:
-    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "follow": args.follow}
+    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "follow": args.follow, "first_parent": args.first_parent}
 
 
 def _history(args: argparse.Namespace):

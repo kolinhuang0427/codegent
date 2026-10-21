@@ -136,6 +136,7 @@ class GitTracer:
         until: str | None = None,
         author: str | None = None,
         follow: bool = True,
+        first_parent: bool = False,
     ) -> Bloodline:
         if max_commits is not None and max_commits <= 0:
             raise GitError("max_commits must be greater than zero or None")
@@ -162,6 +163,9 @@ class GitTracer:
             "--numstat",
             "--find-renames",
         ]
+        if first_parent:
+            args.append("--first-parent")
+            selection["first_parent"] = True
         if follow:
             args.append("--follow")
         else:

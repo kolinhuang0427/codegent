@@ -103,3 +103,6 @@ It can be combined with date windows and commit limits.
 
 `--no-follow` inspects only the selected filename instead of following its earlier
 names. JSON and text reports disclose this restricted history scope.
+
+`--first-parent` follows the integration branch through merges, excluding individual
+side-branch commits. These reports describe the selected integration history.
