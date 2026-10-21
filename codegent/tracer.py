@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import subprocess
 from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Any
 
 from .models import Bloodline, CommitNode
@@ -24,6 +25,16 @@ class GitExecutionError(GitError):
 
 class PathNotFoundError(GitError):
     """Raised when a traced path has no history."""
+
+
+def iso_date(value: str) -> str:
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise GitError(f"invalid ISO date: {value!r}") from exc
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc).isoformat()
 
 
 @dataclass(slots=True)
@@ -121,6 +132,8 @@ class GitTracer:
         ref: str = "HEAD",
         *,
         max_commits: int | None = 10000,
+        since: str | None = None,
+        until: str | None = None,
     ) -> Bloodline:
         if max_commits is not None and max_commits <= 0:
             raise GitError("max_commits must be greater than zero or None")
@@ -130,6 +143,13 @@ class GitTracer:
 
         path = self.normalize_path(path)
 
+        selection: dict[str, Any] = {}
+        if since:
+            selection["since"] = iso_date(since)
+        if until:
+            selection["until"] = iso_date(until)
+        if since and until and selection["since"] > selection["until"]:
+            raise GitError("--since must not be later than --until")
         args = [
             "log",
             "--follow",
@@ -141,6 +161,10 @@ class GitTracer:
             "--numstat",
             "--find-renames",
         ]
+        if since:
+            args.append(f"--since-as-filter={selection['since']}")
+        if until:
+            args.append(f"--until={selection['until']}")
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits + 1}")
         args.extend([self.resolve_ref(ref), "--", path])
@@ -152,12 +176,12 @@ class GitTracer:
             newest_first = newest_first[:max_commits]
         if not newest_first:
             raise PathNotFoundError(
-                f"no history found for {path!r}; check the path or choose an older commit"
+                f"no matching history for {path!r}; check the path, ref, and filters"
             )
 
         commits = list(reversed(newest_first))
         shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
-        self._assign_roles(commits, complete=not (shallow or truncated))
+        self._assign_roles(commits, complete=not (shallow or truncated or selection))
         return Bloodline(
             path=path,
             commits=commits,
@@ -167,6 +191,7 @@ class GitTracer:
             max_commits=max_commits,
             truncated=truncated,
             shallow=shallow,
+            selection=selection,
         )
 
     def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:

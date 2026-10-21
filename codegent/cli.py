@@ -27,6 +27,8 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--since", default=argparse.SUPPRESS, help="Include commits since an ISO date (UTC if unspecified)")
+    common.add_argument("--until", default=argparse.SUPPRESS, help="Include commits up to an ISO date")
     common.add_argument("--ref", default=argparse.SUPPRESS, help="History tip (default: HEAD)")
     common.add_argument("--repo", default=argparse.SUPPRESS, help="Git repository path")
     common.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
@@ -91,16 +93,17 @@ def main(argv: list[str] | None = None) -> int:
 
 
 def _apply_defaults(args: argparse.Namespace) -> None:
-    if not hasattr(args, "ref"):
-        args.ref = "HEAD"
-    if not hasattr(args, "repo"):
-        args.repo = "."
-    if not hasattr(args, "json_output"):
-        args.json_output = False
-    if not hasattr(args, "no_color"):
-        args.no_color = False
-    if not hasattr(args, "max_commits"):
-        args.max_commits = 10000
+    defaults = {
+        "ref": "HEAD", "repo": ".", "json_output": False, "no_color": False,
+        "max_commits": 10000, "since": None, "until": None,
+    }
+    for key, value in defaults.items():
+        if not hasattr(args, key):
+            setattr(args, key, value)
+
+
+def _history_options(args: argparse.Namespace) -> dict[str, Any]:
+    return {"max_commits": args.max_commits, "since": args.since, "until": args.until}
 
 
 def _history(args: argparse.Namespace):
@@ -108,7 +111,7 @@ def _history(args: argparse.Namespace):
     if positional_ref and args.ref != "HEAD" and positional_ref != args.ref:
         raise GitError("choose either a positional commit or --ref, not conflicting refs")
     return GitTracer(args.repo).trace_path(
-        args.path, positional_ref or args.ref, max_commits=args.max_commits,
+        args.path, positional_ref or args.ref, **_history_options(args),
     )
 
 

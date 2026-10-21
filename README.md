@@ -90,3 +90,10 @@ JSON includes `history_complete`, `origin_confirmed`, `shallow`, and `warnings`.
 All history commands accept `--ref <commit-or-tag>`, for example
 `codegent ancestry src/auth.py --ref v1.0.0`. Trace also retains its optional
 positional commit argument; conflicting positional and named refs are rejected.
+
+### Date windows
+
+Use `--since 2026-01-01 --until 2026-02-01T23:59:59Z` to select commits by Git's
+committer date. Values must be ISO dates or datetimes; omitted timezones mean UTC,
+and date-only values mean midnight. Filtered results describe the selection and
+do not claim a confirmed origin.
