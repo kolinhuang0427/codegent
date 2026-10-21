@@ -4,11 +4,13 @@ from __future__ import annotations
 
 import textwrap
 
+from .display import safe_display
 from .colors import ANSI, heading, muted, paint, role
 from .models import Bloodline, CommitNode
 from .tracer import DiffLineage
 
 
+@safe_display
 def render_trace(bloodline: Bloodline, *, color: bool = True) -> str:
     lines = [
         "",
@@ -22,6 +24,7 @@ def render_trace(bloodline: Bloodline, *, color: bool = True) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+@safe_display
 def render_family_tree(bloodline: Bloodline, *, color: bool = True) -> str:
     if not bloodline.commits:
         return "  No lineage found."
@@ -34,6 +37,7 @@ def render_family_tree(bloodline: Bloodline, *, color: bool = True) -> str:
     return "\n".join(f"  {line}" for line in rendered)
 
 
+@safe_display
 def render_ancestry(bloodline: Bloodline, *, color: bool = True) -> str:
     lines = [
         "",
@@ -61,6 +65,7 @@ def render_ancestry(bloodline: Bloodline, *, color: bool = True) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+@safe_display
 def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
     lines = [
         "",
@@ -87,6 +92,7 @@ def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
     return "\n".join(lines).rstrip() + "\n"
 
 
+@safe_display
 def render_bloodline_summary(bloodline: Bloodline, *, color: bool = True) -> str:
     origin = bloodline.origin
     if origin is None:
@@ -113,6 +119,7 @@ def render_bloodline_summary(bloodline: Bloodline, *, color: bool = True) -> str
     return "\n".join(lines)
 
 
+@safe_display
 def render_diff_lineage(diff: DiffLineage, *, color: bool = True) -> str:
     lines = [
         "",

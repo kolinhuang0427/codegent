@@ -5,6 +5,16 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_repository_control_characters_are_inert_in_text_and_preserved_in_json(self):
+        name = "file\x1b[2J.py"
+        self.write(name)
+        self.commit("subject \x1b[2J")
+        result = self.cli("trace", name, "--no-color")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("\x1b", result.stdout)
+        self.assertIn("\\x1b[2J", result.stdout)
+        self.assertEqual(self.payload("trace", name)["path"], name)
+
     def test_git_timeout_is_bounded_and_readable(self):
         fake_git = self.repo / "git"
         fake_git.write_text("#!/bin/sh\nexec /bin/sleep 5\n")

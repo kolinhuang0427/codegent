@@ -12,6 +12,7 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .exports import render_markdown
+from .display import escape_text
 from .tracer import GitError, GitTracer
 from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners
 from .tree import (
@@ -244,5 +245,5 @@ def _error(message: str, *, json_output: bool, color: bool) -> int:
     if json_output:
         print(json.dumps({"error": message}), file=sys.stderr)
     else:
-        print(danger(f"codegent: {message}", color), file=sys.stderr)
+        print(danger(f"codegent: {escape_text(message)}", color), file=sys.stderr)
     return 1
