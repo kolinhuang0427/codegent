@@ -2,6 +2,20 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_author_report_aggregates_multiple_commits_per_identity(self):
+        self.write("file.py", "one\n")
+        self.commit()
+        self.write("file.py", "one\ntwo\n")
+        self.commit()
+        self.write("file.py", "one\ntwo\nthree\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        result = self.payload("authors", "file.py")
+        self.assertEqual(result["total_authors"], 2)
+        self.assertEqual(result["authors"][0]["commits"], 2)
+        self.assertEqual(result["authors"][0]["additions"], 2)
+        limited = self.payload("authors", "file.py", "--limit", "1", "--sort", "churn")
+        self.assertEqual(len(limited["authors"]), 1)
+
     def test_mailmap_merges_author_aliases(self):
         self.write("file.py")
         self.commit("alias", env={"GIT_AUTHOR_NAME": "Alias", "GIT_AUTHOR_EMAIL": "alias@example.test"})

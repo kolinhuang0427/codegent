@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .tracer import GitError, GitTracer
+from .reports import author_report, render_authors
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -75,6 +76,12 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("commit_a", help="Base commit/ref")
     diff.add_argument("commit_b", help="Target commit/ref")
     diff.set_defaults(handler=_cmd_diff)
+
+    authors = subparsers.add_parser("authors", parents=[common], help="Summarize authors and churn for a file")
+    authors.add_argument("path")
+    authors.add_argument("--sort", choices=("commits", "churn", "name"), default="commits")
+    authors.add_argument("--limit", type=positive_int, default=20)
+    authors.set_defaults(handler=_cmd_authors)
 
     return parser
 
@@ -159,6 +166,11 @@ def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     if args.json_output:
         return diff.to_dict()
     return render_diff_lineage(diff, color=color)
+
+
+def _cmd_authors(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = author_report(_history(args), sort=args.sort, limit=args.limit)
+    return report if args.json_output else render_authors(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

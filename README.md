@@ -119,3 +119,10 @@ and diffs. History may still list commits with no remaining textual changes.
 
 `--mailmap` canonicalizes history author names and emails using Git's current
 mailmap configuration. Without it, history reports preserve recorded identities.
+
+### Author summaries
+
+`codegent authors src/auth.py --sort churn --limit 10 --json` aggregates commit
+counts, additions, deletions, binary changes, and first/last author dates per
+identity. Sorting supports `commits`, `churn`, and `name`. All history filters apply.
+Churn measures changed lines, not quality or current ownership.
