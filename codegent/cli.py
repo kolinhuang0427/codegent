@@ -114,7 +114,7 @@ def _cmd_trace(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 def _cmd_ancestry(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = GitTracer(args.repo).trace_path(args.path, max_commits=args.max_commits)
     if args.json_output:
-        return {"path": bloodline.path, "repo": bloodline.repo, "genes": [g.to_dict() for g in bloodline.genes()]}
+        return bloodline.to_dict()
     return render_ancestry(bloodline, color=color)
 
 

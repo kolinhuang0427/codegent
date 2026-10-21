@@ -77,3 +77,10 @@ Binary file changes are detected from git numstat output and are reported withou
 Paths are literal filenames, including brackets and other Git pathspec metacharacters.
 Relative paths resolve from the directory passed to `--repo`. Absolute paths inside
 that repository are also accepted, including paths deleted from the current tree.
+
+### Incomplete history
+
+Shallow clones and commit limits are reported explicitly in every history view.
+JSON includes `history_complete`, `origin_confirmed`, `shallow`, and `warnings`.
+`origin` denotes the earliest observed commit; it is a confirmed origin only when
+`origin_confirmed` is true. Net line counts are estimates, not surviving-line attribution.

@@ -156,7 +156,8 @@ class GitTracer:
             )
 
         commits = list(reversed(newest_first))
-        self._assign_roles(commits)
+        shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
+        self._assign_roles(commits, complete=not (shallow or truncated))
         return Bloodline(
             path=path,
             commits=commits,
@@ -165,6 +166,7 @@ class GitTracer:
             followed_renames=True,
             max_commits=max_commits,
             truncated=truncated,
+            shallow=shallow,
         )
 
     def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:
@@ -226,14 +228,14 @@ class GitTracer:
             commits.append(node)
         return commits
 
-    def _assign_roles(self, commits: list[CommitNode]) -> None:
+    def _assign_roles(self, commits: list[CommitNode], *, complete: bool = True) -> None:
         if not commits:
             return
         origin_author = commits[0].author
         heir_seen = False
         for index, commit in enumerate(commits):
             if index == 0:
-                commit.role = "origin"
+                commit.role = "origin" if complete else "boundary"
             elif commit.renamed_from or commit.renamed_to:
                 commit.role = "renamed"
             elif commit.author != origin_author and not heir_seen:

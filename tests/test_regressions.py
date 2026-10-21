@@ -1,9 +1,27 @@
 import json
+import subprocess
 
 from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_shallow_and_limited_history_do_not_claim_a_confirmed_origin(self):
+        self.write("file.py")
+        self.commit("first")
+        self.write("file.py", "second\n")
+        self.commit("second")
+        limited = self.payload("bloodline", "file.py", "--max-commits", "1")
+        self.assertFalse(limited["origin_confirmed"])
+        self.assertEqual(limited["origin"]["role"], "boundary")
+        clone = self.repo.parent / (self.repo.name + "-shallow")
+        import shutil
+        self.addCleanup(shutil.rmtree, clone, True)
+        subprocess.run(["git", "clone", "--depth=1", self.repo.as_uri(), str(clone)], check=True, capture_output=True)
+        result = self.payload("ancestry", "file.py", "--repo", str(clone))
+        self.assertTrue(result["shallow"])
+        self.assertFalse(result["history_complete"])
+        self.assertIn("Shallow", " ".join(result["warnings"]))
+
     def test_ancestry_uses_each_historical_filename(self):
         self.write("old.py")
         self.commit("original")
