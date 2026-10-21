@@ -52,7 +52,7 @@ class GitTracer:
         self.repo = os.path.abspath(repo)
 
     def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
-        cmd = ["git", "-C", self.repo, *args]
+        cmd = ["git", "--literal-pathspecs", "-C", self.repo, *args]
         try:
             result = subprocess.run(
                 cmd,

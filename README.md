@@ -74,3 +74,4 @@ Shows file-level code transfer between two commits using git rename detection.
 Binary file changes are detected from git numstat output and are reported without line statistics. Empty repositories and missing paths produce clear errors. Large histories can be bounded with `--max-commits`.
 
 `--max-commits` must be a positive integer; zero and negative limits are rejected.
+Paths are literal filenames, including brackets and other Git pathspec metacharacters.

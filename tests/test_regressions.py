@@ -4,6 +4,15 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_git_pathspec_metacharacters_are_literal(self):
+        self.write("[ab].py")
+        self.commit("literal bracket filename")
+        self.write("a.py")
+        self.commit("different file")
+        result = self.payload("trace", "[ab].py")
+        self.assertEqual(result["total_commits"], 1)
+        self.assertEqual(result["commits"][0]["message"], "literal bracket filename")
+
     def test_refs_are_single_commits_and_disambiguated_from_paths(self):
         self.write("file.py")
         self.write("main")
