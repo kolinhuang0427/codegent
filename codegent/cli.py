@@ -13,6 +13,7 @@ from typing import Any, Callable
 from .colors import danger, supports_color
 from .exports import render_markdown
 from .display import escape_text
+from ._version import __version__
 from .tracer import GitError, GitTracer
 from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners
 from .tree import (
@@ -33,6 +34,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--version", action="version", version=f"codegent {__version__}")
     common.add_argument("--output", default=argparse.SUPPRESS, help="Atomically write a report to a file; - means stdout")
     common.add_argument("--mailmap", action="store_true", default=argparse.SUPPRESS, help="Canonicalize history authors with .mailmap")
     common.add_argument("--ignore-whitespace", action="store_true", default=argparse.SUPPRESS, help="Ignore whitespace in textual change statistics")

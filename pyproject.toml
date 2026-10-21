@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "codegent"
-version = "0.1.0"
+dynamic = ["version"]
 description = "Trace the evolutionary lineage of code across git history."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -14,3 +14,9 @@ dependencies = []
 
 [project.scripts]
 codegent = "codegent.cli:main"
+
+[tool.setuptools.dynamic]
+version = {attr = "codegent._version.__version__"}
+
+[tool.setuptools.packages.find]
+include = ["codegent*"]

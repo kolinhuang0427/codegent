@@ -4,8 +4,11 @@
 
 ## Installation
 
+Requires Python 3.10+ and Git with `--since-as-filter` support (Git 2.37+).
+
 ```bash
 pip install -e .
+python -m codegent --version
 ```
 
 Optional git subcommand alias:

@@ -1,153 +1,66 @@
-# codegent — Git Code Genealogist
+# codegent specification
 
-## Concept & Vision
+## Purpose
 
-`codegent` traces the evolutionary lineage of code across git history. It answers questions like: "Where did this function come from?", "Who originally wrote this logic?", "Is this code a copy or a true descendant?". Think of it as a family tree for your functions — a genealogy tool that treats commits as births, renames as adoptions, and deletions as deaths.
+Help maintainers inspect file history and repository activity with a dependency-free
+Python CLI. Python 3.10+ and Git 2.37+ are required. The console entry point is
+`codegent`; `python -m codegent` and `python -m codegent.main` are equivalent.
 
-The tone is warm, slightly whimsical, and genuinely useful. Output includes ASCII family trees, rich metadata cards per commit, and a summary of the code's "bloodline."
+## Implemented commands
 
-## Core Features
+| Command | Result |
+| --- | --- |
+| trace | File history with Git rename detection and observed-origin summary |
+| ancestry | Chronological entries with historical filenames and estimated net lines |
+| genemap | Compact timeline of observed changes |
+| bloodline | Observed-origin, author-diversity, and net-line summary |
+| diff | File-level comparison, optional path scope, and aggregate status/line counts |
+| authors | Commit/churn aggregates by author for a file |
+| hotspots | Per-path historical change activity for a repository or directory |
+| owners | Surviving committed text-line attribution using Git blame |
 
-### 1. Trace (Primary Command)
-```
-codegent trace <path> [commit_hash]
-```
-Walks git history to find all commits touching a path, following renames. Produces:
-- An ASCII family tree showing parent↔child relationships
-- Per-commit cards: author, date, message, lines added/deleted
-- "Origin commit" detection (first appearance)
-- "Heir" detection (who inherited the code after original author left)
+## History selection
 
-### 2. Ancestry Report
-```
-codegent ancestry <path>
-```
-Shows the direct lineage chain from first commit to current state. Each entry shows:
-- Commit hash (short), author, date
-- Relationship type: "origin", "heir", "co-author", "renamed"
-- Lines of code carried from this commit
+History commands support a single commit/ref, positive commit bound, ISO date
+window, literal author substring, first-parent traversal, and optional rename
+following. Rename similarity defaults to 50 percent and is configurable from 1 to
+100. Mailmap identity mapping and whitespace-insensitive statistics are optional.
+Git processes have a configurable positive finite timeout (30 seconds by default).
 
-### 3. Gene Map (Visualization)
-```
-codegent genemap <path>
-```
-Outputs a text-based visualization of the code's evolution:
-- Timeline on Y axis (oldest → newest)
-- Branch lines showing parallel evolution
-- Annotations for major milestones (rewrites, migrations, forks)
+Relative file paths resolve against the directory supplied with `--repo`; absolute
+paths must belong to the repository. Paths are literal, including Git pathspec
+metacharacters. Structured parsing preserves Unicode, tabs, newlines and other
+filename characters using NUL-delimited Git output.
 
-### 4. Bloodline Summary
-```
-codegent bloodline <path>
-```
-One-shot summary card:
-- Original author + date
-- Total commits in lineage
-- Number of files the code migrated through
-- Longest-living fragment age
-- "Genetic diversity" score (how many distinct authors contributed)
+## Evidence and limits
 
-### 5. Diff Lineage
-```
-codegent diff <commit_a> <commit_b>
-```
-Shows what code was transferred between two arbitrary commits — useful for finding if feature X in repo B came from repo A.
+History results include selection, truncation and shallow-repository metadata.
+`origin` is the earliest observed commit. `origin_confirmed` means that no explicit
+filter, commit truncation, or shallow boundary limits the observed Git traversal;
+it does not prove semantic code ancestry. Rename matching is Git's heuristic.
 
-## Technical Approach
+History line counts are accumulated net-diff estimates. They do not measure
+surviving code, copied-code origin, or author quality. `owners` uses Git blame for
+surviving-line attribution at a selected committed ref; it excludes working-tree
+edits and rejects binary files. Git blame identities follow its mailmap behavior.
 
-### Python + Git Commands
-- Pure Python standard library + `git` CLI calls via `subprocess`
-- No external Python dependencies (batteries-included)
-- Typed for clarity
+Hotspots count historical names separately across renames and can include deleted
+paths. Churn is activity, not a defect or risk score. The history views are linear
+presentations of observed commits, not a complete branch graph.
 
-### Rename Detection
-- Uses `git log --follow` to track renames
-- `git show` with `--raw` format for diff stats
-- Commit graph traversal via `git rev-list --reverse`
+## Output contract
 
-### Output
-- Rich terminal output with ANSI colors (via `colorama` or manually)
-- `--json` flag on all commands for machine-readable output
-- ASCII art family trees using box-drawing characters
+Reports support terminal text, JSON, or Markdown. JSON retains original strings;
+terminal and Markdown renderers escape control and bidi override characters.
+Long terminal box fields account for wide and combining characters. Terminal color
+obeys explicit no-color flags and plain-terminal environment settings.
 
-### Architecture
-```
-codegent/
-├── __init__.py
-├── cli.py           # Click-based CLI
-├── tracer.py        # Core git history traversal
-├── tree.py          # ASCII family tree builder
-├── models.py        # CommitNode, CodeGene, Bloodline dataclasses
-├── colors.py        # Terminal color helpers
-└── main.py          # Entry point
-```
+File exports use UTF-8 temporary files and atomic replacement. Failed generation
+preserves existing reports. Output parent directories must already exist.
 
-## CLI Design
+## Verification
 
-All commands support:
-- `--json` — machine-readable JSON output
-- `--no-color` — plain text
-- `--repo <path>` — specify repo (defaults to CWD)
-
-### Trace Example Output
-```
-$ codegent trace src/auth.py
-
-  🔍 Tracing lineage for: src/auth.py
-  📍 Follows renames: yes
-
-  ╭─────────────────────────────────────────╮
-  │ 🪦 Commit 4d3f2a1 — "Remove legacy auth"  │
-  │    Author: Sarah Chen <sarah@example.com>│
-  │    Date: 2024-03-15 (2 years ago)        │
-  │    Role: HEIR (carried 67% of code)      │
-  │    +23 -89 lines                        │
-  ╰─────────────────────────────────────────╯
-                    │
-                    ▼
-  ╭─────────────────────────────────────────╮
-  │ 🌟 Commit a1b2c3d — "OAuth2 migration"  │
-  │    Author: Sarah Chen <sarah@example.com>│
-  │    Date: 2023-06-01 (3 years ago)       │
-  │    Role: ORIGIN (first appearance)      │
-  │    +312 -0 lines                        │
-  ╰─────────────────────────────────────────╯
-                    │
-                    ▼
-  ╭─────────────────────────────────────────╮
-  │ 💀 Commit f5e6d7c — "Stub out auth"      │
-  │    Author: Maya Patel <maya@example.com> │
-  │    Date: 2022-11-20 (3.5 years ago)     │
-  │    Role: CO-AUTHOR (framework)           │
-  │    +45 -0 lines                          │
-  ╰─────────────────────────────────────────╯
-
-  📊 Bloodline Summary
-  ─────────────────────────
-  Origin author:    Sarah Chen
-  Code age:         3.5 years
-  Total commits:    12
-  Migration events: 3 (renames/moves)
-  Genetic diversity: 4 authors
-  Survival rate:    34% (code still present)
-```
-
-## Edge Cases
-- File never existed → clear error with suggestion
-- No rename history → just shows linear commit list
-- Binary files → skip diff stats, note "binary"
-- Empty repo → graceful empty state
-- 10,000+ commits → pagination + `--max-commits` flag
-
-## Installation
-```bash
-pip install -e .
-# or
-pip install codegent  (after publishing)
-```
-
-## Companion: `git-gent` Alias
-```bash
-git config --global alias.gent '!codegent'
-git gent trace src/auth.py  # as a git subcommand
-```
+Run `python -m unittest discover -v`. Integration scenarios create real Git
+repositories and invoke the CLI; they cover unusual paths, renames, shallow history,
+filters, merges, author aliases, blame attribution, and exports. Build/install
+validation must also exercise the installed console script outside the source tree.

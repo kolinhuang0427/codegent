@@ -1,9 +1,18 @@
 import json
+import subprocess
+import sys
 
-from .support import RepositoryCase
+from .support import RepositoryCase, ROOT
 
 
 class FeatureTests(RepositoryCase):
+    def test_package_module_entrypoint_exposes_version_and_commands(self):
+        result = subprocess.run([sys.executable, "-m", "codegent", "--version"], cwd=ROOT, capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(result.stdout.strip(), "codegent 0.2.0")
+        help_result = subprocess.run([sys.executable, "-m", "codegent", "--help"], cwd=ROOT, capture_output=True, text=True)
+        self.assertIn("hotspots", help_result.stdout)
+
     def test_markdown_export_escapes_repository_content(self):
         self.write("file.py")
         self.commit("fix | <script>alert(1)</script>")
