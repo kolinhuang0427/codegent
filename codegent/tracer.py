@@ -102,6 +102,8 @@ class GitTracer:
         *,
         max_commits: int | None = 10000,
     ) -> Bloodline:
+        if max_commits is not None and max_commits <= 0:
+            raise GitError("max_commits must be greater than zero or None")
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")

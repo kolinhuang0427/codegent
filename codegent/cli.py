@@ -18,6 +18,13 @@ from .tree import (
 )
 
 
+def positive_int(value: str) -> int:
+    number = int(value)
+    if number <= 0:
+        raise argparse.ArgumentTypeError("must be greater than zero")
+    return number
+
+
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--repo", default=argparse.SUPPRESS, help="Git repository path")
@@ -25,7 +32,7 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
     common.add_argument(
         "--max-commits",
-        type=int,
+        type=positive_int,
         default=argparse.SUPPRESS,
         help="Maximum commits to inspect for history commands",
     )
