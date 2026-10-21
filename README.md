@@ -113,3 +113,6 @@ a lineage at a heavily edited rename. JSON records the selected threshold.
 
 `--timeout 10` limits each Git subprocess to a positive, finite number of seconds
 (default 30). Timed-out operations return a readable error, including in JSON mode.
+
+`--ignore-whitespace` ignores whitespace when computing textual change statistics
+and diffs. History may still list commits with no remaining textual changes.

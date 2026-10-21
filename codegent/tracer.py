@@ -61,17 +61,20 @@ class DiffLineage:
 class GitTracer:
     """Trace file history through git using subprocess calls."""
 
-    def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0) -> None:
+    def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0, ignore_whitespace: bool = False) -> None:
         if not 1 <= rename_threshold <= 100:
             raise GitError("rename threshold must be between 1 and 100")
         if not math.isfinite(timeout) or timeout <= 0:
             raise GitError("timeout must be a positive finite number")
+        self.ignore_whitespace = ignore_whitespace
         self.timeout = timeout
         self.rename_threshold = rename_threshold
         self.repo = os.path.realpath(os.path.expanduser(repo))
         self.path_base = self.repo
 
     def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
+        if self.ignore_whitespace and args and args[0] in ("log", "diff"):
+            args = [args[0], "--ignore-all-space", *args[1:]]
         cmd = ["git", "--literal-pathspecs", "-C", self.repo, *args]
         try:
             result = subprocess.run(
@@ -175,6 +178,8 @@ class GitTracer:
             "--numstat",
             f"--find-renames={self.rename_threshold}%",
         ]
+        if self.ignore_whitespace:
+            selection["ignore_whitespace"] = True
         if first_parent:
             args.append("--first-parent")
             selection["first_parent"] = True
@@ -315,6 +320,8 @@ class GitTracer:
             if status.startswith(("R", "C")):
                 old_path, path = path, tokens[index]
                 index += 1
+            if self.ignore_whitespace and path not in stats_by_path:
+                continue
             entry = stats_by_path.setdefault(path, {
                 "path": path, "additions": 0, "deletions": 0, "binary": False,
             })

@@ -2,6 +2,16 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_whitespace_only_diff_can_be_ignored(self):
+        self.write("file.py", "x = 1\n")
+        base = self.commit()
+        self.write("file.py", "x    =    1\n")
+        self.commit()
+        self.assertEqual(len(self.payload("diff", base, "HEAD")["files"]), 1)
+        self.assertEqual(self.payload("diff", base, "HEAD", "--ignore-whitespace")["files"], [])
+        history = self.payload("trace", "file.py", "--ignore-whitespace")
+        self.assertTrue(history["selection"]["ignore_whitespace"])
+
     def test_rename_similarity_is_configurable_for_history_and_diff(self):
         self.write("old.py", "".join(f"line {i}\n" for i in range(10)))
         base = self.commit()
