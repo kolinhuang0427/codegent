@@ -2,6 +2,17 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_mailmap_merges_author_aliases(self):
+        self.write("file.py")
+        self.commit("alias", env={"GIT_AUTHOR_NAME": "Alias", "GIT_AUTHOR_EMAIL": "alias@example.test"})
+        self.write("file.py", "changed\n")
+        self.write(".mailmap", "First Author <first@example.test> Alias <alias@example.test>\n")
+        self.commit("canonical")
+        self.assertEqual(self.payload("bloodline", "file.py")["genetic_diversity"], 2)
+        mapped = self.payload("bloodline", "file.py", "--mailmap")
+        self.assertEqual(mapped["genetic_diversity"], 1)
+        self.assertTrue(mapped["mailmap"])
+
     def test_whitespace_only_diff_can_be_ignored(self):
         self.write("file.py", "x = 1\n")
         base = self.commit()

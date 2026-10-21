@@ -116,3 +116,6 @@ a lineage at a heavily edited rename. JSON records the selected threshold.
 
 `--ignore-whitespace` ignores whitespace when computing textual change statistics
 and diffs. History may still list commits with no remaining textual changes.
+
+`--mailmap` canonicalizes history author names and emails using Git's current
+mailmap configuration. Without it, history reports preserve recorded identities.

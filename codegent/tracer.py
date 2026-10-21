@@ -61,11 +61,12 @@ class DiffLineage:
 class GitTracer:
     """Trace file history through git using subprocess calls."""
 
-    def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0, ignore_whitespace: bool = False) -> None:
+    def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0, ignore_whitespace: bool = False, mailmap: bool = False) -> None:
         if not 1 <= rename_threshold <= 100:
             raise GitError("rename threshold must be between 1 and 100")
         if not math.isfinite(timeout) or timeout <= 0:
             raise GitError("timeout must be a positive finite number")
+        self.mailmap = mailmap
         self.ignore_whitespace = ignore_whitespace
         self.timeout = timeout
         self.rename_threshold = rename_threshold
@@ -75,6 +76,8 @@ class GitTracer:
     def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
         if self.ignore_whitespace and args and args[0] in ("log", "diff"):
             args = [args[0], "--ignore-all-space", *args[1:]]
+        if self.mailmap and args and args[0] == "log":
+            args = [arg.replace("%an", "%aN").replace("%ae", "%aE") if arg.startswith("--format=") else arg for arg in args]
         cmd = ["git", "--literal-pathspecs", "-C", self.repo, *args]
         try:
             result = subprocess.run(
@@ -222,6 +225,7 @@ class GitTracer:
             shallow=shallow,
             selection=selection,
             rename_threshold=self.rename_threshold,
+            mailmap=self.mailmap,
         )
 
     def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:
