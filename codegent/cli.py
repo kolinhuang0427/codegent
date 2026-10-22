@@ -53,6 +53,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for each Git process (default: 30)")
     common.add_argument("--rename-threshold", type=int, default=argparse.SUPPRESS, help="Rename similarity percentage, 1-100 (default: 50)")
     common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
+    common.add_argument("--newest-first", action="store_true", default=argparse.SUPPRESS, help="Present file history from newest to oldest")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
     common.add_argument("--grep", default=argparse.SUPPRESS, help="Literal commit-message substring")
     common.add_argument("--author", default=argparse.SUPPRESS, help="Literal author name/email substring")
@@ -172,6 +173,8 @@ def main(argv: list[str] | None = None) -> int:
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
+    if args.command not in {"trace", "ancestry", "genemap", "bloodline"}:
+        invalid = invalid | {"newest_first"}
     unsupported = sorted(provided & invalid)
     if unsupported:
         flags = ["--no-follow" if key == "follow" else "--" + key.replace("_", "-") for key in unsupported]
@@ -231,7 +234,7 @@ def _write_output(text: str, destination: str | None) -> None:
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -239,7 +242,7 @@ def _apply_defaults(args: argparse.Namespace) -> None:
 
 
 def _history_options(args: argparse.Namespace) -> dict[str, Any]:
-    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "grep": args.grep, "follow": args.follow, "first_parent": args.first_parent}
+    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "grep": args.grep, "follow": args.follow, "first_parent": args.first_parent, "newest_first": args.newest_first}
 
 
 def _tracer(args: argparse.Namespace) -> GitTracer:

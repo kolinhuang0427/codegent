@@ -277,3 +277,15 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(report["summary"]["files"], 1)
         self.assertEqual(report["total_changed_files"], 3)
         self.assertEqual(report["stat"], "")
+
+    def test_newest_first_changes_presentation_without_changing_origin(self):
+        self.write("file.py")
+        self.commit("oldest")
+        self.write("file.py", "new\n")
+        self.commit("newest")
+        result = self.payload("trace", "file.py", "--newest-first")
+        self.assertEqual([c["message"] for c in result["commits"]], ["newest", "oldest"])
+        self.assertEqual(result["origin"]["message"], "oldest")
+        self.assertEqual(result["latest"]["message"], "newest")
+        self.assertEqual(result["order"], "newest-first")
+        self.assertEqual(result["genes"][0]["commit_hash"], result["latest"]["hash"])

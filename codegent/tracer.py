@@ -215,6 +215,7 @@ class GitTracer:
         follow: bool | None = True,
         allow_empty: bool = False,
         first_parent: bool = False,
+        newest_first: bool = False,
     ) -> Bloodline:
         positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
@@ -268,16 +269,16 @@ class GitTracer:
         args.extend([resolved, "--", path])
 
         output = self.git(args)
-        newest_first = self._parse_log(output)
-        truncated = max_commits is not None and len(newest_first) > max_commits
+        newest_commits = self._parse_log(output)
+        truncated = max_commits is not None and len(newest_commits) > max_commits
         if truncated:
-            newest_first = newest_first[:max_commits]
-        if not newest_first and not allow_empty:
+            newest_commits = newest_commits[:max_commits]
+        if not newest_commits and not allow_empty:
             raise PathNotFoundError(
                 f"no matching history for {path!r}; check the path, ref, and filters"
             )
 
-        commits = list(reversed(newest_first))
+        commits = list(reversed(newest_commits))
         shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
         self._assign_roles(commits, complete=not (shallow or truncated or selection))
         return Bloodline(
@@ -286,6 +287,7 @@ class GitTracer:
             repo=self.root(),
             requested_ref=ref,
             resolved_ref=resolved,
+            newest_first=newest_first,
             followed_renames=bool(follow),
             max_commits=max_commits,
             truncated=truncated,

@@ -254,3 +254,7 @@ This optional search uses the configured similarity threshold and can cost more 
 `diff --status added --status deleted` filters comparison rows and summaries
 together. `total_changed_files` retains the pre-filter count, and the unfiltered
 Git stat is omitted so it cannot contradict the selected rows.
+
+`--newest-first` reverses the presentation of file-history entries in text, JSON,
+and Markdown. Origin/latest semantics and chronological line calculations remain
+unchanged; JSON records the selected `order`.
