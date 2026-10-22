@@ -64,6 +64,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     formats = common.add_mutually_exclusive_group()
     formats.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
     formats.add_argument("--markdown", action="store_true", default=argparse.SUPPRESS, help="Export a Markdown report")
+    common.add_argument("--compact", action="store_true", default=argparse.SUPPRESS, help="Emit single-line JSON reports (requires --json)")
     common.add_argument("--ascii", action="store_true", default=argparse.SUPPRESS, help="Use plain ASCII drawing characters in terminal reports")
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
     common.add_argument(
@@ -165,6 +166,8 @@ def main(argv: list[str] | None = None) -> int:
     _apply_defaults(args)
     if args.json_output and args.markdown:
         parser.error("choose one of --json and --markdown")
+    if args.compact and not args.json_output:
+        parser.error("--compact requires --json")
     invalid = {
         "diff": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
@@ -185,7 +188,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = handler(args, color)
         if args.json_output:
-            output = json.dumps(result, indent=2, sort_keys=True)
+            output = json.dumps(result, indent=None if args.compact else 2,
+                                separators=(",", ":") if args.compact else None, sort_keys=True)
         elif args.markdown:
             output = render_markdown(result, args.command)
         else:
@@ -234,7 +238,7 @@ def _write_output(text: str, destination: str | None) -> None:
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False, "compact": False,
         "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():

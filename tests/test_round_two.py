@@ -300,3 +300,15 @@ class RoundTwoTests(RepositoryCase):
         self.assertNotIn("\x1b", report.stdout)
         self.assertIn("+---", report.stdout)
         self.assertIn("Unicode 中文", report.stdout)
+
+    def test_compact_json_retains_data_in_one_report_line(self):
+        self.write("file.py")
+        self.commit()
+        normal = self.payload("trace", "file.py")
+        compact = self.cli("trace", "file.py", "--json", "--compact")
+        self.assertEqual(compact.returncode, 0, compact.stderr)
+        self.assertEqual(compact.stdout.count("\n"), 1)
+        self.assertEqual(json.loads(compact.stdout), normal)
+        invalid = self.cli("trace", "file.py", "--compact")
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("requires --json", invalid.stderr)

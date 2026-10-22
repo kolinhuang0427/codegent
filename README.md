@@ -262,3 +262,6 @@ unchanged; JSON records the selected `order`.
 `--ascii` replaces terminal drawing glyphs with plain ASCII and disables color.
 Unicode filenames and messages remain intact; use a UTF-8 terminal or file export
 for non-ASCII repository content.
+
+`--json --compact` emits each complete report on one line, with the same
+structured data as indented JSON. It works with stdout and atomic file exports.
