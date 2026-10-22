@@ -349,3 +349,15 @@ class RoundTwoTests(RepositoryCase):
         self.assertTrue(clean["working_tree_clean"])
         self.assertEqual(clean["head"], head)
         self.assertIn("# codegent doctor", self.cli("doctor", "--markdown").stdout)
+
+    def test_ownership_can_ignore_listed_mechanical_revisions(self):
+        self.write("file.py", "value = 1\nother = 2\n")
+        self.commit()
+        self.write("file.py", "value=1\nother=2\n")
+        formatting = self.commit(env={"GIT_AUTHOR_NAME": "Formatter", "GIT_AUTHOR_EMAIL": "format@example.test"})
+        (self.repo / ".git/ignore-revs").write_text(formatting + "\n")
+        self.assertIn("Formatter", self.payload("owners", "file.py")["owners"][0]["author"])
+        report = self.payload("owners", "file.py", "--ignore-revs-file", ".git/ignore-revs")
+        self.assertEqual(report["owners"][0]["lines"], 2)
+        self.assertIn("First Author", report["owners"][0]["author"])
+        self.assertTrue(report["ignore_revs_file"].endswith(".git/ignore-revs"))

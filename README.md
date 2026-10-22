@@ -276,3 +276,7 @@ New reports use restrictive temporary-file permissions; special mode bits are no
 `doctor --json` reports Git/Python/package versions, committed HEAD, shallow
 state, object format, and worktree cleanliness without changing files. Empty
 worktrees are supported. Diagnostics do not expose remote URLs or credentials.
+
+`owners FILE --ignore-revs-file .git-blame-ignore-revs` asks Git blame to ignore
+listed mechanical commits. Relative file paths resolve from `--repo`; the selected
+file and whitespace mode are recorded in JSON. Reattribution follows Git heuristics.

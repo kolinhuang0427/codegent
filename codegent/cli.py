@@ -131,6 +131,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     owners = subparsers.add_parser("owners", parents=[common], help="Report surviving-line attribution at a commit")
     owners.add_argument("path")
+    owners.add_argument("--ignore-revs-file", help="Ignore listed mechanical commits when attributing lines")
     owners.add_argument("--lines", help="Inclusive START:END line range")
     owners.set_defaults(handler=_cmd_owners)
 
@@ -342,7 +343,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).owners(args.path, args.ref, lines=args.lines)
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file)
     return report if args.json_output or args.markdown else render_owners(report)
 
 
