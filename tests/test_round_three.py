@@ -105,3 +105,17 @@ class RoundThreeTests(RepositoryCase):
         missing_head = self.cli("trace", "file.py", "--json")
         self.assertEqual(missing_head.returncode, 1)
         self.assertIn("invalid commit/ref", json.loads(missing_head.stderr)["error"])
+
+    def test_refs_browses_lightweight_and_annotated_tags_with_limits(self):
+        self.write("file.py")
+        head = self.commit()
+        self.git("tag", "v1")
+        self.git("-c", "tag.gpgsign=false", "tag", "-a", "v2", "-m", "release")
+        report = self.payload("refs", "--kind", "tag")
+        self.assertEqual(report["total_refs"], 2)
+        tags = {row["short_name"]: row for row in report["refs"]}
+        self.assertEqual(tags["v1"]["object_id"], head)
+        self.assertEqual(tags["v2"]["object_type"], "tag")
+        self.assertEqual(tags["v2"]["peeled_object_id"], head)
+        self.assertTrue(self.payload("refs", "--limit", "1")["truncated"])
+        self.assertIn("# codegent refs", self.cli("refs", "--markdown").stdout)

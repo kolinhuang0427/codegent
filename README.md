@@ -295,3 +295,7 @@ the displayed rows.
 
 Explicit historical refs can be analyzed even when the checked-out branch is
 unborn. A missing default HEAD still produces a structured invalid-ref error.
+
+`refs --kind branch|tag|remote|all --limit 1000` lists available references and
+object IDs, including annotated-tag object and peeled-target metadata. It works
+without a current HEAD and does not expose remote URLs.

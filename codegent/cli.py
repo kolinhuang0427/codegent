@@ -17,7 +17,7 @@ from .exports import render_markdown
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -172,6 +172,11 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     doctor = subparsers.add_parser("doctor", parents=[common], help="Inspect Git and worktree readiness without changing files")
     doctor.set_defaults(handler=_cmd_doctor)
 
+    refs = subparsers.add_parser("refs", parents=[common], help="Browse branch, tag, and remote-tracking references")
+    refs.add_argument("--kind", choices=("all", "branch", "tag", "remote"), default="all")
+    refs.add_argument("--limit", type=positive_int, default=1000)
+    refs.set_defaults(handler=_cmd_refs)
+
     return parser
 
 
@@ -194,6 +199,7 @@ def main(argv: list[str] | None = None) -> int:
         "hotspots": {"follow"},
         "timeline": {"follow"},
         "cochange": {"follow"},
+        "refs": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "doctor": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
@@ -386,6 +392,11 @@ def _cmd_source(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).doctor()
     return report if args.json_output or args.markdown else render_doctor(report)
+
+
+def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).refs(kind=args.kind, limit=args.limit)
+    return report if args.json_output or args.markdown else render_refs(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

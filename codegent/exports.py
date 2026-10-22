@@ -41,6 +41,10 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += _table(["Author", "Lines", "Percent"], [
             [row[key] for key in ("author", "lines", "percentage")] for row in report["owners"]])
         lines += ["", _cell(report["attribution"])]
+    elif command == "refs":
+        lines += _table(["Ref", "Kind", "Object type", "Object ID", "Peeled ID"], [
+            [row[key] for key in ("ref", "kind", "object_type", "object_id", "peeled_object_id")] for row in report["refs"]])
+        lines += ["", f"Showing {len(report['refs'])} of {report['total_refs']} references."]
     elif command == "doctor":
         lines += _table(["Check", "Value"], [[key, value] for key, value in report.items()])
     elif command == "source":

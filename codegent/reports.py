@@ -188,3 +188,11 @@ def render_source(report: dict[str, Any]) -> str:
 @safe_display
 def render_doctor(report: dict[str, Any]) -> str:
     return "Repository diagnostics\n" + "\n".join(f"{key}: {value}" for key, value in report.items()) + "\n"
+
+
+@safe_display
+def render_refs(report: dict[str, Any]) -> str:
+    lines = ["Repository references", "Kind  Ref  Object type  Object ID"]
+    lines.extend(f"{row['kind']}  {row['ref']}  {row['object_type']}  {row['object_id']}" for row in report["refs"])
+    lines.append(f"Showing {len(report['refs'])} of {report['total_refs']} references")
+    return "\n".join(lines) + "\n"
