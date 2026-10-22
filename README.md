@@ -218,3 +218,7 @@ path globs from the ranking. These patterns filter report rows; traced paths rem
 
 `hotspots --current-only` keeps paths present at the selected commit, excluding
 deleted historical names. `--ref` controls the tree used for this filter.
+
+`authors --group-by email` combines recorded name variants sharing an email
+address. JSON retains the original `identities` in each group. Identity grouping
+remains the default; `.mailmap` is still available for explicit alias mappings.

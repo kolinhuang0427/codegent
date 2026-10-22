@@ -157,3 +157,14 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual([row["path"] for row in current["files"]], ["present.py"])
         self.assertTrue(current["current_only"])
         self.assertEqual(self.payload("hotspots", "--current-only", "--ref", original)["matching_files"], 2)
+
+    def test_authors_can_group_name_variants_by_email(self):
+        self.write("file.py")
+        self.commit()
+        self.write("file.py", "changed\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Another Name", "GIT_AUTHOR_EMAIL": "first@example.test"})
+        self.assertEqual(self.payload("authors", "file.py")["total_authors"], 2)
+        report = self.payload("authors", "file.py", "--group-by", "email")
+        self.assertEqual(report["total_authors"], 1)
+        self.assertEqual(report["authors"][0]["commits"], 2)
+        self.assertEqual(len(report["authors"][0]["identities"]), 2)

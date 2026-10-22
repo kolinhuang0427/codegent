@@ -9,16 +9,21 @@ from .models import Bloodline
 from .tracer import iso_date, positive_count, GitError
 
 
-def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20) -> dict[str, Any]:
+def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20, group_by: str = "identity") -> dict[str, Any]:
     positive_count(limit, "limit")
     if sort not in {"commits", "churn", "name"}:
         raise GitError("invalid author sort; choose commits, churn, or name")
+    if group_by not in {"identity", "email"}:
+        raise GitError("author grouping must be identity or email")
     authors: dict[str, dict[str, Any]] = {}
     for commit in bloodline.commits:
-        row = authors.setdefault(commit.author, {
-            "author": commit.author, "commits": 0, "additions": 0, "deletions": 0,
+        identity = commit.author_email.casefold() if group_by == "email" and commit.author_email else commit.author
+        row = authors.setdefault(identity, {
+            "author": identity, "identities": [], "commits": 0, "additions": 0, "deletions": 0,
             "binary_changes": 0, "first_seen": commit.date, "last_seen": commit.date,
         })
+        if commit.author not in row["identities"]:
+            row["identities"].append(commit.author)
         row["commits"] += 1
         row["additions"] += commit.additions
         row["deletions"] += commit.deletions
@@ -36,7 +41,7 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
         "path": bloodline.path, "repo": bloodline.repo, "requested_ref": bloodline.requested_ref, "resolved_ref": bloodline.resolved_ref,
         "history_complete": bloodline.history_complete, "warnings": bloodline.warnings,
         "selection": bloodline.selection, "total_commits": len(bloodline.commits),
-        "total_authors": len(rows), "authors": rows[:limit], "sort": sort,
+        "total_authors": len(rows), "authors": rows[:limit], "sort": sort, "group_by": group_by,
     }
 
 
