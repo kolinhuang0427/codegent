@@ -17,7 +17,7 @@ from .exports import render_markdown
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -25,6 +25,13 @@ from .tree import (
     render_genemap,
     render_trace,
 )
+
+
+def nonnegative_int(value: str) -> int:
+    number = int(value)
+    if number < 0:
+        raise argparse.ArgumentTypeError("must be zero or greater")
+    return number
 
 
 def positive_int(value: str) -> int:
@@ -183,6 +190,14 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     commits.add_argument("--path", default=".", help="Optional literal file or directory scope")
     commits.set_defaults(handler=_cmd_commits)
 
+    patch = subparsers.add_parser("patch", parents=[common], help="Preview a size-limited unified patch between revisions")
+    patch.add_argument("base")
+    patch.add_argument("target")
+    patch.add_argument("--path", action="append", default=[], dest="paths")
+    patch.add_argument("--context", type=nonnegative_int, default=3)
+    patch.add_argument("--max-bytes", type=positive_int, default=1048576)
+    patch.set_defaults(handler=_cmd_patch)
+
     return parser
 
 
@@ -206,6 +221,7 @@ def main(argv: list[str] | None = None) -> int:
         "timeline": {"follow"},
         "cochange": {"follow"},
         "commits": {"ref", "follow"},
+        "patch": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "refs": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "doctor": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
@@ -410,6 +426,11 @@ def _cmd_commits(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.target, exclude_ref=args.base, **_history_options(args))
     report = commit_range_report(history)
     return report if args.json_output or args.markdown else render_commits(report)
+
+
+def _cmd_patch(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).patch(args.base, args.target, paths=args.paths, context=args.context, max_bytes=args.max_bytes)
+    return report if args.json_output or args.markdown else render_patch(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

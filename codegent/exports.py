@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import html
+import re
 from .display import escape_text
 from typing import Any
 
@@ -41,6 +42,11 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += _table(["Author", "Lines", "Percent"], [
             [row[key] for key in ("author", "lines", "percentage")] for row in report["owners"]])
         lines += ["", _cell(report["attribution"])]
+    elif command == "patch":
+        preview = "\n".join(escape_text(line) for line in report["patch"].split("\n"))
+        longest = max((len(match.group()) for match in re.finditer(r"`+", preview)), default=0)
+        fence = "`" * max(3, longest + 1)
+        lines += [fence + "diff", preview.rstrip("\n"), fence]
     elif command == "refs":
         lines += _table(["Ref", "Kind", "Object type", "Object ID", "Peeled ID"], [
             [row[key] for key in ("ref", "kind", "object_type", "object_id", "peeled_object_id")] for row in report["refs"]])

@@ -474,6 +474,24 @@ class GitTracer:
                 row["commits"].add(current["commit"])
         return owners
 
+    def patch(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None,
+              context: int = 3, max_bytes: int = 1048576) -> dict[str, Any]:
+        positive_count(max_bytes, "max_bytes")
+        if type(context) is not int or context < 0:
+            raise GitError("patch context must be a nonnegative integer")
+        self.ensure_repository()
+        selected = [self.normalize_path(path) for path in (paths or [])]
+        base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
+        patch = self.git(["diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color",
+                          f"--unified={context}", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected])
+        size = len(patch.encode("utf-8", "surrogateescape"))
+        if size > max_bytes:
+            raise GitError(f"patch output exceeds --max-bytes={max_bytes}; narrow the comparison")
+        return {"repo": self.repo, "commit_a": commit_a, "commit_b": commit_b,
+                "resolved_a": base, "resolved_b": target, "paths": selected, "context": context,
+                "size_bytes": size, "max_bytes": max_bytes, "ignore_whitespace": self.ignore_whitespace,
+                "rename_threshold": self.rename_threshold, "patch": patch}
+
     def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
         if statuses and any(status not in CHANGE_STATUSES for status in statuses):

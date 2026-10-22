@@ -215,3 +215,10 @@ def render_commits(report: dict[str, Any]) -> str:
     lines.extend(f"{row['short_hash']}  {row['author_name']}  {row['message']}" for row in report["commits"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
+
+
+def render_patch(report: dict[str, Any]) -> str:
+    from .display import escape_text
+    title = escape_text(f"Patch preview: {report['commit_a']} -> {report['commit_b']}")
+    content = "\n".join(escape_text(line) for line in report["patch"].split("\n"))
+    return title + "\n" + (content or "No changes.\n")

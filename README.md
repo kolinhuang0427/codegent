@@ -303,3 +303,9 @@ without a current HEAD and does not expose remote URLs.
 `commits BASE TARGET --path src --newest-first` lists selected commits reachable
 from TARGET but not BASE, with immutable bounds, history filters, and explicit
 truncation/selection metadata. Equal bounds produce an empty report.
+
+`patch BASE TARGET --path src --context 3 --max-bytes 1048576` previews a
+unified comparison without applying it. The report-size budget is checked after
+Git generates the diff; narrow large comparisons. JSON preserves the original
+patch, while terminal and Markdown previews escape control characters. Markdown
+fences adapt to backticks in patch content. Binary changes use Git summaries.
