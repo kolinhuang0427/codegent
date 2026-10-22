@@ -44,3 +44,12 @@ class RoundTwoTests(RepositoryCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("invalid ISO date", json.loads(result.stderr)["error"])
             self.assertNotIn("Traceback", result.stderr)
+
+    def test_file_history_rejects_directory_aggregation(self):
+        self.write("src/one.py")
+        self.write("src/two.py")
+        self.commit()
+        result = self.cli("trace", "src", "--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("directory", json.loads(result.stderr)["error"])
+        self.assertEqual(self.payload("hotspots", "src")["matching_files"], 2)

@@ -196,6 +196,9 @@ class GitTracer:
             raise GitRepositoryError("repository has no commits yet")
 
         path = self.normalize_path(path)
+        resolved = self.resolve_ref(ref)
+        if follow is not None and self.git(["cat-file", "-t", f"{resolved}:{path}"], check=False).strip() == "tree":
+            raise GitError("path is a directory; use hotspots for directory activity")
 
         selection: dict[str, Any] = {}
         if since:
@@ -232,7 +235,7 @@ class GitTracer:
             args.append(f"--until={selection['until']}")
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits + 1}")
-        args.extend([self.resolve_ref(ref), "--", path])
+        args.extend([resolved, "--", path])
 
         output = self.git(args)
         newest_first = self._parse_log(output)

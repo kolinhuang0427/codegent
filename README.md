@@ -197,3 +197,6 @@ python scripts/smoke_installed.py /tmp/codegent-check/bin/codegent
 
 Repository selection ignores inherited `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
 `GIT_COMMON_DIR`, and `GIT_PREFIX` overrides so `--repo` remains authoritative.
+
+File lineage commands reject directory tips; use `hotspots DIRECTORY` for
+repository activity rather than combining several files into a single lineage.
