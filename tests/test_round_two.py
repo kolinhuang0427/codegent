@@ -207,3 +207,18 @@ class RoundTwoTests(RepositoryCase):
         filtered = self.payload("cochange", "a.py", "--min-shared", "2")
         self.assertEqual(filtered["matching_files"], 1)
         self.assertIn("not a dependency", filtered["interpretation"])
+
+    def test_files_lists_historical_objects_and_executable_modes(self):
+        name = "src/中文\tfile.py"
+        self.write(name, "abc\n")
+        self.write("tool.sh", "#!/bin/sh\n")
+        (self.repo / "tool.sh").chmod(0o755)
+        original = self.commit()
+        self.write("new.py")
+        self.commit()
+        report = self.payload("files", "--ref", original)
+        self.assertEqual(report["total_files"], 2)
+        rows = {row["path"]: row for row in report["files"]}
+        self.assertEqual(rows[name]["size"], 4)
+        self.assertEqual(rows["tool.sh"]["mode"], "100755")
+        self.assertTrue(self.payload("files", "--limit", "1")["truncated"])

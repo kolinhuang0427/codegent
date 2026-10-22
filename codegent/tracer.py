@@ -282,6 +282,23 @@ class GitTracer:
             mailmap=self.mailmap,
         )
 
+    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000) -> dict[str, Any]:
+        positive_count(limit, "limit")
+        path = self.normalize_path(path)
+        resolved = self.resolve_ref(ref)
+        output = self.git(["ls-tree", "-r", "-l", "-z", "--full-tree", resolved, "--", path])
+        files = []
+        for record in output.split("\0"):
+            if not record:
+                continue
+            metadata, filename = record.split("\t", 1)
+            mode, kind, oid, size = metadata.split()
+            files.append({"path": filename, "mode": mode, "type": kind, "object_id": oid,
+                          "size": None if size == "-" else int(size)})
+        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
+                "total_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
+                "truncated": len(files) > limit, "files": files[:limit]}
+
     def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None) -> dict[str, Any]:
         path = self.normalize_path(path)
         commit = self.resolve_ref(ref)

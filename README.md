@@ -233,3 +233,7 @@ filters still use their documented Git committer-date semantics.
 `cochange FILE --min-shared 2 --limit 10` ranks paths changed in the same commits
 as a literal historical filename. Rename entries match either side without treating
 the two names as separate companion files. Co-occurrence is not a dependency claim.
+
+`files [PATH] --ref COMMIT --limit 1000` browses a committed tree without
+checking it out. Reports include literal paths, modes, object types/IDs, blob sizes,
+and explicit entry-count truncation; submodule sizes are unknown rather than zero.

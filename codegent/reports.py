@@ -168,3 +168,11 @@ def render_cochange(report: dict[str, Any]) -> str:
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     lines.append(report["interpretation"])
     return "\n".join(lines) + "\n"
+
+
+@safe_display
+def render_files(report: dict[str, Any]) -> str:
+    lines = [f"Tracked files: {report['path']} at {report['resolved_ref'][:12]}", "Mode  Type  Bytes  Path"]
+    lines.extend(f"{row['mode']}  {row['type']}  {row['size'] if row['size'] is not None else '-'}  {row['path']}" for row in report["files"])
+    lines.append(f"Showing {len(report['files'])} of {report['total_files']} entries")
+    return "\n".join(lines) + "\n"

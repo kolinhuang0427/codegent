@@ -16,7 +16,7 @@ from .exports import render_markdown
 from .display import escape_text
 from ._version import __version__
 from .tracer import GitError, GitTracer
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -137,6 +137,11 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     cochange.add_argument("--min-shared", type=positive_int, default=1)
     cochange.set_defaults(handler=_cmd_cochange)
 
+    files = subparsers.add_parser("files", parents=[common], help="List tracked files and object metadata at a commit")
+    files.add_argument("path", nargs="?", default=".")
+    files.add_argument("--limit", type=positive_int, default=1000)
+    files.set_defaults(handler=_cmd_files)
+
     return parser
 
 
@@ -155,6 +160,7 @@ def main(argv: list[str] | None = None) -> int:
         "hotspots": {"follow"},
         "timeline": {"follow"},
         "cochange": {"follow"},
+        "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
     unsupported = sorted(provided & invalid)
     if unsupported:
@@ -316,6 +322,11 @@ def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     history = tracer.repository_history(tracer.root(), args.ref, **_history_options(args))
     report = cochange_report(history, path, limit=args.limit, min_shared=args.min_shared)
     return report if args.json_output or args.markdown else render_cochange(report)
+
+
+def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).tracked_files(args.path, args.ref, limit=args.limit)
+    return report if args.json_output or args.markdown else render_files(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:
