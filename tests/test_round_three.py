@@ -49,3 +49,23 @@ class RoundThreeTests(RepositoryCase):
         accepted = self.payload("owners", "file.py", "--max-bytes", "1024")
         self.assertEqual(accepted["selected_lines"], 2)
         self.assertEqual(accepted["size"], 36)
+
+    def test_malformed_tree_blob_size_and_blame_records_are_structured_errors(self):
+        import shlex
+        import shutil
+        self.write("file.py")
+        self.commit()
+        wrapper = self.repo / "wrapper"
+        wrapper.mkdir()
+        fake = wrapper / "git"
+        real_git = shlex.quote(shutil.which("git"))
+        cases = [(" ls-tree ", "broken", ("files",)),
+                 (" cat-file -s ", "NaN", ("source", "file.py")),
+                 (" blame ", "\tmissing header\n", ("owners", "file.py"))]
+        for trigger, payload, arguments in cases:
+            fake.write_text('#!/bin/sh\ncase " $* " in\n*"' + trigger + '"*) printf %s ' + shlex.quote(payload) + ';;\n*) exec ' + real_git + ' "$@";;\nesac\n')
+            fake.chmod(0o755)
+            result = self.cli(*arguments, "--json", env={"PATH": str(wrapper) + os.pathsep + os.environ["PATH"]})
+            self.assertEqual(result.returncode, 1, result.stderr)
+            self.assertIn("cannot parse Git", json.loads(result.stderr)["error"])
+            self.assertNotIn("Traceback", result.stderr)

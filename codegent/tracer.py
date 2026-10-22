@@ -318,6 +318,18 @@ class GitTracer:
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
         output = self.git(["ls-tree", "-r", "-l", "-z", "--full-tree", resolved, "--", path])
+        files = self._parse_tree(output)
+        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
+                "total_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
+                "truncated": len(files) > limit, "files": files[:limit]}
+
+    def _parse_tree(self, output: str) -> list[dict[str, Any]]:
+        try:
+            return self._decode_tree(output)
+        except (ValueError, IndexError, KeyError) as exc:
+            raise GitError("cannot parse Git tree metadata") from exc
+
+    def _decode_tree(self, output: str) -> list[dict[str, Any]]:
         files = []
         for record in output.split("\0"):
             if not record:
@@ -326,16 +338,19 @@ class GitTracer:
             mode, kind, oid, size = metadata.split()
             files.append({"path": filename, "mode": mode, "type": kind, "object_id": oid,
                           "size": None if size == "-" else int(size)})
-        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
-                "total_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
-                "truncated": len(files) > limit, "files": files[:limit]}
+        return files
 
     def _text_blob(self, resolved: str, path: str, *, max_bytes: int, purpose: str) -> tuple[str, int]:
         positive_count(max_bytes, "max_bytes")
         object_name = f"{resolved}:{path}"
         if self.git(["cat-file", "-t", object_name]).strip() != "blob":
             raise GitError(f"{purpose} requires a file blob")
-        size = int(self.git(["cat-file", "-s", object_name]).strip())
+        try:
+            size = int(self.git(["cat-file", "-s", object_name]).strip())
+            if size < 0:
+                raise ValueError("negative blob size")
+        except ValueError as exc:
+            raise GitError("cannot parse Git object size") from exc
         if size > max_bytes:
             raise GitError(f"{purpose} blob exceeds --max-bytes={max_bytes}")
         content = self.git(["cat-file", "blob", object_name])
@@ -391,9 +406,30 @@ class GitTracer:
                 raise GitError("line range is outside the file")
             args.extend(["-L", f"{start},{end}"])
         args.extend([commit, "--", path])
+        owners = self._parse_blame(self.git(args))
+        total = sum(row["lines"] for row in owners.values())
+        rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"]))
+        for row in rows:
+            row["commits"] = sorted(row["commits"])
+            row["percentage"] = round(row["lines"] * 100 / total, 2) if total else 0
+        shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
+        warnings = ["Shallow repository: blame may attribute older lines to a boundary commit."] if shallow else []
+        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
+                "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
+                "file_lines": file_lines, "selected_lines": total, "line_range": lines, "size": size, "max_bytes": max_bytes,
+                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves,
+                "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
+
+    def _parse_blame(self, output: str) -> dict[str, dict[str, Any]]:
+        try:
+            return self._decode_blame(output)
+        except (ValueError, IndexError, KeyError) as exc:
+            raise GitError("cannot parse Git blame metadata") from exc
+
+    def _decode_blame(self, output: str) -> dict[str, dict[str, Any]]:
         owners: dict[str, dict[str, Any]] = {}
         current: dict[str, str] = {}
-        for line in self.git(args).split("\n"):
+        for line in output.split("\n"):
             if re.match(r"^[0-9a-f]{40,64} ", line):
                 current = {"commit": line.split(" ", 1)[0]}
             elif line == "boundary":
@@ -408,18 +444,7 @@ class GitTracer:
                 row["lines"] += 1
                 row["boundary_lines"] += int(current.get("boundary") == "true")
                 row["commits"].add(current["commit"])
-        total = sum(row["lines"] for row in owners.values())
-        rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"]))
-        for row in rows:
-            row["commits"] = sorted(row["commits"])
-            row["percentage"] = round(row["lines"] * 100 / total, 2) if total else 0
-        shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
-        warnings = ["Shallow repository: blame may attribute older lines to a boundary commit."] if shallow else []
-        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
-                "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
-                "file_lines": file_lines, "selected_lines": total, "line_range": lines, "size": size, "max_bytes": max_bytes,
-                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves,
-                "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
+        return owners
 
     def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
