@@ -185,7 +185,7 @@ Owners reports disclose shallow-clone blame boundaries and support
 cannot inject formatting into structured history parsing.
 
 CI exercises the real-repository suite on Linux and macOS with Python 3.10 and
-3.12, then builds a wheel and runs all eight installed commands in text, JSON,
+3.12, then builds a wheel and runs all thirteen installed commands in text, JSON,
 and Markdown outside the checkout. To repeat the installed-package check locally:
 
 ```bash
@@ -280,3 +280,7 @@ worktrees are supported. Diagnostics do not expose remote URLs or credentials.
 `owners FILE --ignore-revs-file .git-blame-ignore-revs` asks Git blame to ignore
 listed mechanical commits. Relative file paths resolve from `--repo`; the selected
 file and whitespace mode are recorded in JSON. Reattribution follows Git heuristics.
+
+`owners --detect-moves` enables Git blame within-file block-move detection
+(`-M`). JSON records the mode; this remains heuristic attribution, not proof of
+semantic authorship. It combines with whitespace and ignored-revision options.

@@ -361,3 +361,29 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(report["owners"][0]["lines"], 2)
         self.assertIn("First Author", report["owners"][0]["author"])
         self.assertTrue(report["ignore_revs_file"].endswith(".git/ignore-revs"))
+
+    def test_move_aware_ownership_preserves_within_file_block_attribution(self):
+        rows = [f"original_line_{i} = 'long stable explanatory content for moved block detection'\n" for i in range(6)]
+        self.write("file.py", "".join(rows))
+        self.commit()
+        self.write("file.py", "".join(rows[3:] + rows[:3]))
+        self.commit(env={"GIT_AUTHOR_NAME": "Mover", "GIT_AUTHOR_EMAIL": "mover@example.test"})
+        ordinary = self.payload("owners", "file.py")
+        self.assertEqual(len(ordinary["owners"]), 2)
+        report = self.payload("owners", "file.py", "--detect-moves")
+        self.assertTrue(report["detect_moves"])
+        self.assertEqual(len(report["owners"]), 1)
+        self.assertEqual(report["owners"][0]["lines"], 6)
+        self.assertIn("First Author", report["owners"][0]["author"])
+
+    def test_concurrent_no_clobber_exports_have_exactly_one_winner(self):
+        self.write("file.py")
+        self.commit()
+        target = self.repo / "race.json"
+        arguments = [sys.executable, "-m", "codegent", "--repo", str(self.repo), "trace", "file.py",
+                     "--json", "--output", str(target), "--no-clobber"]
+        processes = [subprocess.Popen(arguments, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(2)]
+        outputs = [process.communicate(timeout=20) for process in processes]
+        self.assertEqual(sorted(process.returncode for process in processes), [0, 1], outputs)
+        self.assertEqual(json.loads(target.read_text())["total_commits"], 1)
+        self.assertEqual(list(self.repo.glob(".codegent-*")), [])

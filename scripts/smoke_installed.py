@@ -60,11 +60,35 @@ def main() -> None:
         diff = report("diff", base, "HEAD")
         assert diff["summary"]["files"] == 2 and diff["summary"]["binary_files"] == 1
         checked.append("diff")
+        timeline = report("timeline")
+        assert sum(row["commits"] for row in timeline["periods"]) == 2
+        checked.append("timeline")
+        companions = report("cochange", name)
+        assert companions["target_commits"] == 1 and companions["files"][0]["path"] == "binary.dat"
+        checked.append("cochange")
+        assert report("files")["total_files"] == 2
+        checked.append("files")
+        source = report("source", name, "--lines", "2:3")
+        assert source["content"] == "two\nthree\n"
+        checked.append("source")
+        assert report("doctor")["working_tree_clean"]
+        checked.append("doctor")
+        assert report("owners", name, "--detect-moves")["selected_lines"] == 4
+        compact = invoke("trace", name, "--json", "--compact")
+        assert compact.count("\n") == 1 and json.loads(compact)["total_commits"] == 2
         target = repo / "report.md"
         assert invoke("trace", name, "--markdown", "--output", str(target)) == ""
         assert target.read_text().startswith("# codegent trace")
+        saved = target.read_text()
+        try:
+            invoke("trace", name, "--markdown", "--output", str(target), "--no-clobber")
+        except subprocess.CalledProcessError as exc:
+            assert exc.returncode == 1
+        else:
+            raise AssertionError("no-clobber replaced an existing export")
+        assert target.read_text() == saved
         for command in checked:
-            arguments = [command, base, "HEAD"] if command == "diff" else [command] if command == "hotspots" else [command, name]
+            arguments = [command, base, "HEAD"] if command == "diff" else [command] if command in {"hotspots", "timeline", "files", "doctor"} else [command, name]
             assert invoke(*arguments, "--markdown").startswith(f"# codegent {command}")
             assert invoke(*arguments, "--no-color").strip()
         print(json.dumps({"version": invoke("--version").strip(), "installed_executable": executable,

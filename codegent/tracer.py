@@ -123,6 +123,7 @@ class GitTracer:
         cmd = ["git", "-c", "color.ui=false", "-c", "log.showSignature=false",
                "-c", "i18n.logOutputEncoding=UTF-8", "--literal-pathspecs", "-C", self.repo, *args]
         environment = dict(os.environ)
+        environment["GIT_OPTIONAL_LOCKS"] = "0"
         for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX"):
             environment.pop(key, None)
         try:
@@ -358,7 +359,7 @@ class GitTracer:
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 
-    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None) -> dict[str, Any]:
+    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False) -> dict[str, Any]:
         path = self.normalize_path(path)
         commit = self.resolve_ref(ref)
         source = self.git(["cat-file", "blob", f"{commit}:{path}"])
@@ -366,6 +367,8 @@ class GitTracer:
             raise GitError("line ownership is unavailable for binary files")
         file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
         args = ["blame", "--line-porcelain"]
+        if detect_moves:
+            args.append("-M")
         ignored_file = None
         if ignore_revs_file:
             ignored_file = os.path.abspath(os.path.join(self.path_base, os.path.expanduser(ignore_revs_file)))
@@ -410,7 +413,7 @@ class GitTracer:
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
                 "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines,
-                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace,
+                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
     def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
