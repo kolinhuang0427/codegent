@@ -215,3 +215,6 @@ including message bodies. It combines with date and author filters.
 
 `hotspots --exclude "vendor/*" --exclude "build/*"` removes root-relative
 path globs from the ranking. These patterns filter report rows; traced paths remain literal.
+
+`hotspots --current-only` keeps paths present at the selected commit, excluding
+deleted historical names. `--ref` controls the tree used for this filter.

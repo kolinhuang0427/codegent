@@ -146,3 +146,14 @@ class RoundTwoTests(RepositoryCase):
         report = self.payload("hotspots", "--exclude", "vendor/*", "--exclude", "build/*")
         self.assertEqual([row["path"] for row in report["files"]], ["src/file.py"])
         self.assertEqual(report["excludes"], ["vendor/*", "build/*"])
+
+    def test_current_only_hotspots_follow_the_selected_tip(self):
+        self.write("gone.py")
+        self.write("present.py")
+        original = self.commit()
+        self.git("rm", "gone.py")
+        self.commit()
+        current = self.payload("hotspots", "--current-only")
+        self.assertEqual([row["path"] for row in current["files"]], ["present.py"])
+        self.assertTrue(current["current_only"])
+        self.assertEqual(self.payload("hotspots", "--current-only", "--ref", original)["matching_files"], 2)
