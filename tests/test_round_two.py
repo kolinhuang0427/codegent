@@ -53,3 +53,12 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(result.returncode, 1)
         self.assertIn("directory", json.loads(result.stderr)["error"])
         self.assertEqual(self.payload("hotspots", "src")["matching_files"], 2)
+
+    def test_git_notes_do_not_corrupt_structured_history(self):
+        self.write("file.py")
+        self.commit()
+        self.git("notes", "add", "-m", "maintenance note\twith metadata")
+        self.git("config", "log.showNotes", "true")
+        result = self.payload("trace", "file.py")
+        self.assertEqual(result["total_commits"], 1)
+        self.assertEqual(result["total_additions"], 3)

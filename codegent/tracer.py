@@ -214,6 +214,7 @@ class GitTracer:
             "-z",
             "--no-ext-diff",
             "--no-textconv",
+            "--no-notes",
             "--numstat",
             f"--find-renames={self.rename_threshold}%",
         ]
