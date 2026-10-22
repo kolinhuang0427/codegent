@@ -55,6 +55,8 @@ class DiffLineage:
     stat: str
     paths: list[str] = field(default_factory=list)
     rename_threshold: int = 50
+    merge_base: bool = False
+    input_a_resolved: str = ""
     resolved_a: str = ""
     resolved_b: str = ""
     ignore_whitespace: bool = False
@@ -75,6 +77,8 @@ class DiffLineage:
             "commit_a": self.commit_a,
             "commit_b": self.commit_b,
             "resolved_a": self.resolved_a,
+            "merge_base": self.merge_base,
+            "input_a_resolved": self.input_a_resolved,
             "resolved_b": self.resolved_b,
             "ignore_whitespace": self.ignore_whitespace,
             "files": self.files,
@@ -378,12 +382,18 @@ class GitTracer:
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
-    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None) -> DiffLineage:
+    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False) -> DiffLineage:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
         selected_paths = [self.normalize_path(path) for path in (paths or [])]
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
+        input_a_resolved = base
+        if merge_base:
+            bases = self.git(["merge-base", "--all", base, target], check=False).splitlines()
+            if len(bases) != 1:
+                raise GitError("comparison requires exactly one merge base; choose explicit refs")
+            base = bases[0]
         stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
         numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
         name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
@@ -393,6 +403,8 @@ class GitTracer:
             commit_a=commit_a,
             commit_b=commit_b,
             resolved_a=base,
+            merge_base=merge_base,
+            input_a_resolved=input_a_resolved,
             resolved_b=target,
             ignore_whitespace=self.ignore_whitespace,
             files=files,

@@ -100,6 +100,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     diff = subparsers.add_parser("diff", parents=[common], help="Compare two commits")
     diff.add_argument("commit_a", help="Base commit/ref")
     diff.add_argument("commit_b", help="Target commit/ref")
+    diff.add_argument("--merge-base", action="store_true", help="Compare the shared ancestor against the target")
     diff.add_argument("--summary", action="store_true", help="Show only aggregate comparison statistics")
     diff.add_argument("--path", action="append", default=[], dest="paths", help="Restrict diff to a literal file/directory (repeatable)")
     diff.set_defaults(handler=_cmd_diff)
@@ -281,7 +282,7 @@ def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
 
 
 def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths)
+    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths, merge_base=args.merge_base)
     if args.summary:
         report = diff.to_dict()
         report.pop("files")

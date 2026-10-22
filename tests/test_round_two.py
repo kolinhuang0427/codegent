@@ -234,3 +234,18 @@ class RoundTwoTests(RepositoryCase):
         oversized = self.cli("source", "file.py", "--max-bytes", "3", "--json")
         self.assertIn("exceeds", json.loads(oversized.stderr)["error"])
         self.assertIn("# codegent source", self.cli("source", "file.py", "--markdown").stdout)
+
+    def test_merge_base_comparison_omits_unrelated_base_branch_changes(self):
+        self.write("shared.py")
+        common = self.commit()
+        self.git("checkout", "-b", "feature")
+        self.write("feature.py")
+        self.commit()
+        self.git("checkout", "main")
+        self.write("main.py")
+        main_tip = self.commit()
+        report = self.payload("diff", "main", "feature", "--merge-base")
+        self.assertEqual([row["path"] for row in report["files"]], ["feature.py"])
+        self.assertEqual(report["resolved_a"], common)
+        self.assertEqual(report["input_a_resolved"], main_tip)
+        self.assertTrue(report["merge_base"])

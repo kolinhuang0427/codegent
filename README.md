@@ -242,3 +242,7 @@ and explicit entry-count truncation; submodule sizes are unknown rather than zer
 text without changing the checkout. JSON preserves selected content and line
 endings; display formats use numbered, escaped lines. Binary or oversized blobs
 are rejected before preview, and the size limit applies before line selection.
+
+`diff BASE TARGET --merge-base` compares the unique common ancestor to TARGET,
+matching a branch-review view. Requested refs and effective immutable comparison
+commits are recorded separately. Unrelated histories or multiple merge bases fail explicitly.
