@@ -181,9 +181,11 @@ class GitTracer:
         return os.path.relpath(absolute, self.repo).replace(os.sep, "/")
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
-        args = ["rev-list", "--reverse", self.resolve_ref(ref)]
-        if path:
-            args.extend(["--", path])
+        self.ensure_repository()
+        normalized = self.normalize_path(path) if path is not None else None
+        args = ["rev-list", "--reverse", self.resolve_ref(ref), "--"]
+        if normalized is not None:
+            args.append(normalized)
         output = self.git(args)
         return [line for line in output.splitlines() if line]
 

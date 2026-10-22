@@ -29,3 +29,13 @@ class RoundThreeTests(RepositoryCase):
         report = self.payload("trace", "file.py", "--repo", str(child))
         self.assertEqual(report["total_commits"], 1)
         self.assertTrue(report["repo"].endswith("work\n"))
+
+    def test_reachable_commit_api_normalizes_subdirectory_and_absolute_paths(self):
+        self.write("src/[file].py")
+        first = self.commit()
+        self.write("outside.py")
+        second = self.commit()
+        tracer = GitTracer(str(self.repo / "src"))
+        self.assertEqual(tracer.list_reachable_commits(path="[file].py"), [first])
+        self.assertEqual(tracer.list_reachable_commits(path=str(self.repo / "src/[file].py")), [first])
+        self.assertEqual(tracer.list_reachable_commits(), [first, second])
