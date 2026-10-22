@@ -35,3 +35,12 @@ class RoundTwoTests(RepositoryCase):
         result = self.payload("trace", "src/file.py", "--ref", original)
         self.assertEqual(result["path"], "src/file.py")
         self.assertEqual(result["total_commits"], 1)
+
+    def test_out_of_range_timezone_conversion_is_a_structured_error(self):
+        self.write("file.py")
+        self.commit()
+        for date in ("0001-01-01T00:00:00+14:00", "9999-12-31T23:59:59-14:00"):
+            result = self.cli("trace", "file.py", "--since", date, "--json")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("invalid ISO date", json.loads(result.stderr)["error"])
+            self.assertNotIn("Traceback", result.stderr)
