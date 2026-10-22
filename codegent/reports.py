@@ -103,3 +103,36 @@ def render_owners(report: dict[str, Any]) -> str:
     lines.extend(f"Warning: {warning}" for warning in report.get("warnings", []))
     lines.append(report["attribution"])
     return "\n".join(lines) + "\n"
+
+
+def timeline_report(history: Bloodline, *, period: str = "month") -> dict[str, Any]:
+    widths = {"day": 10, "month": 7, "year": 4}
+    if period not in widths:
+        raise GitError("timeline period must be day, month, or year")
+    buckets: dict[str, dict[str, Any]] = {}
+    for commit in history.commits:
+        key = iso_date(commit.date)[:widths[period]]
+        row = buckets.setdefault(key, {"period": key, "commits": 0, "authors": set(), "files": set(),
+                                       "additions": 0, "deletions": 0, "binary_changes": 0})
+        row["commits"] += 1
+        row["authors"].add(commit.author)
+        row["files"].update(commit.files)
+        row["additions"] += commit.additions
+        row["deletions"] += commit.deletions
+        row["binary_changes"] += sum(int(item["binary"]) for item in commit.changes)
+    rows = [buckets[key] for key in sorted(buckets)]
+    for row in rows:
+        row["authors"] = len(row["authors"])
+        row["files"] = len(row["files"])
+    return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
+            "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
+            "selection": history.selection, "warnings": history.warnings, "period": period,
+            "date_basis": "author dates normalized to UTC", "periods": rows}
+
+
+@safe_display
+def render_timeline(report: dict[str, Any]) -> str:
+    lines = [f"Activity timeline: {report['path']} ({report['date_basis']})", "Period  Commits  Authors  Files  +Lines  -Lines"]
+    lines.extend(f"{row['period']}  {row['commits']:7}  {row['authors']:7}  {row['files']:5}  {row['additions']:6}  {row['deletions']:6}" for row in report["periods"])
+    lines.extend(f"Warning: {warning}" for warning in report["warnings"])
+    return "\n".join(lines) + "\n"

@@ -225,3 +225,7 @@ remains the default; `.mailmap` is still available for explicit alias mappings.
 
 `authors --min-commits 3 --limit 10` focuses a contribution report while retaining
 total, matching, displayed, and omitted author counts so filtered rows stay explicit.
+
+`timeline [PATH] --period day|month|year` groups commit activity by UTC author
+date, including distinct authors/files and text/binary change counts. History
+filters still use their documented Git committer-date semantics.

@@ -16,7 +16,7 @@ from .exports import render_markdown
 from .display import escape_text
 from ._version import __version__
 from .tracer import GitError, GitTracer
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -126,6 +126,11 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     owners.add_argument("--lines", help="Inclusive START:END line range")
     owners.set_defaults(handler=_cmd_owners)
 
+    timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author-date periods")
+    timeline.add_argument("path", nargs="?", default=".")
+    timeline.add_argument("--period", choices=("day", "month", "year"), default="month")
+    timeline.set_defaults(handler=_cmd_timeline)
+
     return parser
 
 
@@ -142,6 +147,7 @@ def main(argv: list[str] | None = None) -> int:
         "diff": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
         "hotspots": {"follow"},
+        "timeline": {"follow"},
     }.get(args.command, set())
     unsupported = sorted(provided & invalid)
     if unsupported:
@@ -289,6 +295,12 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).owners(args.path, args.ref, lines=args.lines)
     return report if args.json_output or args.markdown else render_owners(report)
+
+
+def _cmd_timeline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
+    report = timeline_report(history, period=args.period)
+    return report if args.json_output or args.markdown else render_timeline(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

@@ -181,3 +181,15 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(report["matching_authors"], 1)
         self.assertEqual(report["omitted_authors"], 1)
         self.assertEqual(report["authors"][0]["commits"], 2)
+
+    def test_timeline_groups_author_dates_in_utc(self):
+        self.write("file.py")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-01-31T23:30:00-02:00", "GIT_COMMITTER_DATE": "2026-02-01T01:30:00Z"})
+        self.write("file.py", "two\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-02-15T12:00:00Z", "GIT_COMMITTER_DATE": "2026-02-15T12:00:00Z"})
+        self.write("other.py")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-03-01T12:00:00Z", "GIT_COMMITTER_DATE": "2026-03-01T12:00:00Z"})
+        report = self.payload("timeline")
+        self.assertEqual([row["period"] for row in report["periods"]], ["2026-02", "2026-03"])
+        self.assertEqual([row["commits"] for row in report["periods"]], [2, 1])
+        self.assertIn("# codegent timeline", self.cli("timeline", "--markdown").stdout)

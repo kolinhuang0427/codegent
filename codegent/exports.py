@@ -37,6 +37,11 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += _table(["Author", "Lines", "Percent"], [
             [row[key] for key in ("author", "lines", "percentage")] for row in report["owners"]])
         lines += ["", _cell(report["attribution"])]
+    elif command == "timeline":
+        lines += _table(["Period", "Commits", "Authors", "Files", "+", "-"], [
+            [row[key] for key in ("period", "commits", "authors", "files", "additions", "deletions")]
+            for row in report["periods"]])
+        lines += ["", _cell(report["date_basis"])]
     elif command == "diff":
         summary = report["summary"]
         lines += _table(["Files", "Additions", "Deletions", "Binary files"], [
