@@ -256,6 +256,7 @@ class GitTracer:
             commits=commits,
             repo=self.root(),
             requested_ref=ref,
+            resolved_ref=resolved,
             followed_renames=bool(follow),
             max_commits=max_commits,
             truncated=truncated,

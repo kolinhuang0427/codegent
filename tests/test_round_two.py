@@ -78,3 +78,14 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(result.returncode, 1, result.stderr)
         self.assertIn("cannot parse Git history", json.loads(result.stderr)["error"])
         self.assertNotIn("Traceback", result.stderr)
+
+    def test_history_reports_pin_the_resolved_tip_even_when_a_tag_moves(self):
+        self.write("file.py")
+        first = self.commit()
+        self.git("tag", "release")
+        report = self.payload("trace", "file.py", "--ref", "release")
+        self.write("file.py", "changed\n")
+        second = self.commit()
+        self.git("tag", "-f", "release", second)
+        self.assertEqual(report["resolved_ref"], first)
+        self.assertEqual(self.payload("authors", "file.py", "--ref", "release")["resolved_ref"], second)

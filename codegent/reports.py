@@ -29,7 +29,7 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
         0 if sort == "name" else -row[sort], row["author"].casefold(), row["author"],
     ))
     return {
-        "path": bloodline.path, "repo": bloodline.repo, "requested_ref": bloodline.requested_ref,
+        "path": bloodline.path, "repo": bloodline.repo, "requested_ref": bloodline.requested_ref, "resolved_ref": bloodline.resolved_ref,
         "history_complete": bloodline.history_complete, "warnings": bloodline.warnings,
         "selection": bloodline.selection, "total_commits": len(bloodline.commits),
         "total_authors": len(rows), "authors": rows[:limit], "sort": sort,
@@ -60,7 +60,7 @@ def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", 
     rows = sorted((row for row in files.values() if row["commits"] >= min_commits),
                   key=lambda row: (-row[sort], row["path"]))
     return {
-        "repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
+        "repo": history.repo, "path": history.path, "requested_ref": history.requested_ref, "resolved_ref": history.resolved_ref,
         "history_complete": history.history_complete, "warnings": history.warnings,
         "selection": history.selection, "scanned_commits": len(history.commits),
         "matching_files": len(rows), "files": rows[:limit], "sort": sort,

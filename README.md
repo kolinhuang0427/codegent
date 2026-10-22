@@ -200,3 +200,6 @@ Repository selection ignores inherited `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FI
 
 File lineage commands reject directory tips; use `hotspots DIRECTORY` for
 repository activity rather than combining several files into a single lineage.
+
+History reports record both the requested ref and its immutable `resolved_ref`
+commit ID, making saved results auditable after branches or tags move.

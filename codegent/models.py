@@ -108,6 +108,7 @@ class Bloodline:
     commits: list[CommitNode]
     repo: str
     requested_ref: str = "HEAD"
+    resolved_ref: str = ""
     followed_renames: bool = True
     max_commits: int | None = None
     truncated: bool = False
@@ -228,6 +229,7 @@ class Bloodline:
             "path": self.path,
             "repo": self.repo,
             "requested_ref": self.requested_ref,
+            "resolved_ref": self.resolved_ref,
             "followed_renames": self.followed_renames,
             "max_commits": self.max_commits,
             "truncated": self.truncated,
