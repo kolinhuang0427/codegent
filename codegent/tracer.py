@@ -198,6 +198,7 @@ class GitTracer:
         since: str | None = None,
         until: str | None = None,
         author: str | None = None,
+        grep: str | None = None,
         follow: bool | None = True,
         allow_empty: bool = False,
         first_parent: bool = False,
@@ -239,6 +240,9 @@ class GitTracer:
             args.append("--follow")
         elif follow is False:
             selection["follow"] = False
+        if grep:
+            selection["grep"] = grep
+            args.extend(["--fixed-strings", f"--grep={grep}"])
         if author:
             selection["author"] = author
             args.extend(["--fixed-strings", f"--author={author}"])

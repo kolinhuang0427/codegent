@@ -126,3 +126,14 @@ class RoundTwoTests(RepositoryCase):
                 GitTracer(str(self.repo), rename_threshold=threshold)
         with self.assertRaises(GitError):
             GitTracer(str(self.repo), timeout=True)
+
+    def test_commit_message_search_is_literal_and_marks_filtered_history(self):
+        self.write("file.py")
+        self.commit("add [parser]")
+        self.write("file.py", "updated\n")
+        self.commit("unrelated")
+        report = self.payload("trace", "file.py", "--grep", "[parser]")
+        self.assertEqual(report["total_commits"], 1)
+        self.assertEqual(report["selection"]["grep"], "[parser]")
+        self.assertFalse(report["origin_confirmed"])
+        self.assertEqual(self.payload("hotspots", "--grep", "[parser]")["scanned_commits"], 1)

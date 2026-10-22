@@ -209,3 +209,6 @@ whitespace/rename settings alongside the requested comparison refs.
 
 Net carried-line estimates and origin age are `null` when the necessary complete
 baseline is unavailable. Binary transitions also make cumulative line estimates unknown.
+
+`--grep "literal text"` filters history-based reports by commit-message substring,
+including message bodies. It combines with date and author filters.
