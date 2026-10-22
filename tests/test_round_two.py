@@ -263,3 +263,17 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(item["copied_to"], "copy.py")
         self.assertNotIn("renamed_from", item)
         self.assertEqual(report["summary"]["statuses"], {"copied": 1})
+
+    def test_diff_status_filters_scope_both_rows_and_summary(self):
+        self.write("delete.py", "old content\n")
+        self.write("modify.py", "unchanged\n")
+        base = self.commit()
+        self.git("rm", "delete.py")
+        self.write("modify.py", "modified content\n")
+        self.write("add.py", "new unique addition\n")
+        self.commit()
+        report = self.payload("diff", base, "HEAD", "--status", "added")
+        self.assertEqual([row["path"] for row in report["files"]], ["add.py"])
+        self.assertEqual(report["summary"]["files"], 1)
+        self.assertEqual(report["total_changed_files"], 3)
+        self.assertEqual(report["stat"], "")

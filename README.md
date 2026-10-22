@@ -250,3 +250,7 @@ commits are recorded separately. Unrelated histories or multiple merge bases fai
 `diff --find-copies` enables Git copy detection, including unchanged source
 files. Copies carry `copied_from`/`copied_to`, distinct from rename metadata.
 This optional search uses the configured similarity threshold and can cost more on large trees.
+
+`diff --status added --status deleted` filters comparison rows and summaries
+together. `total_changed_files` retains the pre-filter count, and the unfiltered
+Git stat is omitted so it cannot contradict the selected rows.

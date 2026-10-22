@@ -15,7 +15,7 @@ from .colors import danger, supports_color
 from .exports import render_markdown
 from .display import escape_text
 from ._version import __version__
-from .tracer import GitError, GitTracer
+from .tracer import GitError, GitTracer, CHANGE_STATUSES
 from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source
 from .tree import (
     render_ancestry,
@@ -100,6 +100,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     diff = subparsers.add_parser("diff", parents=[common], help="Compare two commits")
     diff.add_argument("commit_a", help="Base commit/ref")
     diff.add_argument("commit_b", help="Target commit/ref")
+    diff.add_argument("--status", choices=sorted(CHANGE_STATUSES), action="append", default=[], help="Include selected change statuses (repeatable)")
     diff.add_argument("--find-copies", action="store_true", help="Detect copies, including from unchanged source files")
     diff.add_argument("--merge-base", action="store_true", help="Compare the shared ancestor against the target")
     diff.add_argument("--summary", action="store_true", help="Show only aggregate comparison statistics")
@@ -283,7 +284,7 @@ def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
 
 
 def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths, merge_base=args.merge_base, find_copies=args.find_copies)
+    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths, merge_base=args.merge_base, find_copies=args.find_copies, statuses=args.status)
     if args.summary:
         report = diff.to_dict()
         report.pop("files")

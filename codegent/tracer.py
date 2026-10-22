@@ -46,6 +46,9 @@ def iso_date(value: str) -> str:
         raise GitError(f"invalid ISO date: {value!r}") from exc
 
 
+CHANGE_STATUSES = frozenset({"added", "modified", "deleted", "renamed", "copied", "type-changed"})
+
+
 @dataclass(slots=True)
 class DiffLineage:
     repo: str
@@ -54,6 +57,8 @@ class DiffLineage:
     files: list[dict[str, Any]]
     stat: str
     paths: list[str] = field(default_factory=list)
+    statuses: list[str] = field(default_factory=list)
+    total_changed_files: int = 0
     rename_threshold: int = 50
     merge_base: bool = False
     find_copies: bool = False
@@ -87,6 +92,8 @@ class DiffLineage:
             "stat": self.stat,
             "summary": self.summary,
             "paths": self.paths,
+            "statuses": self.statuses,
+            "total_changed_files": self.total_changed_files,
             "rename_threshold": self.rename_threshold,
         }
 
@@ -384,10 +391,13 @@ class GitTracer:
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
-    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False) -> DiffLineage:
+    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
+        if statuses and any(status not in CHANGE_STATUSES for status in statuses):
+            raise GitError("invalid comparison status filter")
+        selected_statuses = sorted(set(statuses or []))
         selected_paths = [self.normalize_path(path) for path in (paths or [])]
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
         input_a_resolved = base
@@ -405,6 +415,10 @@ class GitTracer:
         numstat = self.git([*shared, "--numstat", "-z", *refs])
         name_status = self.git([*shared, "--name-status", "-z", *refs])
         files = self._merge_diff_outputs(numstat, name_status)
+        total_changed_files = len(files)
+        if selected_statuses:
+            files = [item for item in files if item["status"] in selected_statuses]
+            stat = ""  # Git's unfiltered stat would misrepresent the selected rows.
         return DiffLineage(
             repo=self.root(),
             commit_a=commit_a,
@@ -418,6 +432,8 @@ class GitTracer:
             files=files,
             stat=stat.rstrip(),
             paths=selected_paths,
+            statuses=selected_statuses,
+            total_changed_files=total_changed_files,
             rename_threshold=self.rename_threshold,
         )
 
