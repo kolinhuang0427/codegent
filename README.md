@@ -206,3 +206,6 @@ commit ID, making saved results auditable after branches or tags move.
 
 Diff reports, including `--summary`, preserve `resolved_a`, `resolved_b`, and
 whitespace/rename settings alongside the requested comparison refs.
+
+Net carried-line estimates and origin age are `null` when the necessary complete
+baseline is unavailable. Binary transitions also make cumulative line estimates unknown.

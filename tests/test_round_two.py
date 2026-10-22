@@ -99,3 +99,17 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual((report["resolved_a"], report["resolved_b"]), (base, target))
         self.assertTrue(report["ignore_whitespace"])
         self.assertNotIn("files", report)
+
+    def test_partial_or_binary_history_does_not_invent_net_line_totals(self):
+        self.write("file.py")
+        self.commit()
+        self.write("file.py", "one\ntwo\nthree\nfour\n")
+        self.commit()
+        self.assertEqual(self.payload("trace", "file.py")["current_carried_lines"], 4)
+        partial = self.payload("trace", "file.py", "--max-commits", "1")
+        self.assertIsNone(partial["current_carried_lines"])
+        self.assertIsNone(partial["genes"][0]["carried_lines"])
+        self.assertIsNone(partial["age_days"])
+        (self.repo / "binary.dat").write_bytes(b"\0data")
+        self.commit()
+        self.assertIsNone(self.payload("trace", "binary.dat")["current_carried_lines"])

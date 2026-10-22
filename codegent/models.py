@@ -78,7 +78,7 @@ class CodeGene:
     role: str
     lines_added: int
     lines_deleted: int
-    carried_lines: int
+    carried_lines: int | None
     binary: bool = False
     migrated_from: str | None = None
     migrated_to: str | None = None
@@ -169,7 +169,9 @@ class Bloodline:
         return sum(commit.deletions for commit in self.commits)
 
     @property
-    def current_carried_lines(self) -> int:
+    def current_carried_lines(self) -> int | None:
+        if not self.history_complete or any(commit.binary for commit in self.commits):
+            return None
         carried = 0
         for commit in self.commits:
             carried += commit.additions - commit.deletions
@@ -180,7 +182,7 @@ class Bloodline:
     @property
     def age_days(self) -> int | None:
         origin = self.origin
-        if not origin:
+        if not origin or not self.history_complete:
             return None
         parsed = _parse_git_date(origin.date)
         if not parsed:
@@ -200,7 +202,9 @@ class Bloodline:
         for commit in reversed(self.commits):
             if commit.renamed_from:
                 current_path = commit.renamed_from
+        unknown_baseline = not self.history_complete
         for commit in self.commits:
+            unknown_baseline = unknown_baseline or commit.binary
             if commit.renamed_to:
                 current_path = commit.renamed_to
             carried += commit.additions - commit.deletions
@@ -216,7 +220,7 @@ class Bloodline:
                     role=commit.role,
                     lines_added=commit.additions,
                     lines_deleted=commit.deletions,
-                    carried_lines=carried,
+                    carried_lines=None if unknown_baseline else carried,
                     binary=commit.binary,
                     migrated_from=commit.renamed_from,
                     migrated_to=commit.renamed_to,

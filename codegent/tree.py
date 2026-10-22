@@ -60,7 +60,7 @@ def render_ancestry(bloodline: Bloodline, *, color: bool = True) -> str:
         )
         lines.append(
             "  "
-            + f"   carried={gene.carried_lines} +{gene.lines_added} -{gene.lines_deleted}{binary}{moved}"
+            + f"   carried={gene.carried_lines if gene.carried_lines is not None else 'unknown'} +{gene.lines_added} -{gene.lines_deleted}{binary}{moved}"
         )
     return "\n".join(lines).rstrip() + "\n"
 
@@ -111,7 +111,7 @@ def render_bloodline_summary(bloodline: Bloodline, *, color: bool = True) -> str
         f"  Total commits:      {len(bloodline.commits)}",
         f"  Migration events:   {migrations} {migration_word}",
         f"  Genetic diversity:  {bloodline.genetic_diversity} authors",
-        f"  Current line trace: {bloodline.current_carried_lines} net lines",
+        f"  Current line trace: {bloodline.current_carried_lines if bloodline.current_carried_lines is not None else 'unknown'} net lines",
     ]
     lines.extend(f"  Warning: {warning}" for warning in bloodline.warnings)
     if bloodline.latest and bloodline.latest.binary:
