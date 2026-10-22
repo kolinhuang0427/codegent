@@ -89,3 +89,13 @@ class RoundTwoTests(RepositoryCase):
         self.git("tag", "-f", "release", second)
         self.assertEqual(report["resolved_ref"], first)
         self.assertEqual(self.payload("authors", "file.py", "--ref", "release")["resolved_ref"], second)
+
+    def test_diff_summary_preserves_resolved_refs_and_comparison_settings(self):
+        self.write("file.py")
+        base = self.commit()
+        self.write("file.py", "changed\n")
+        target = self.commit()
+        report = self.payload("diff", "HEAD~1", "HEAD", "--summary", "--ignore-whitespace")
+        self.assertEqual((report["resolved_a"], report["resolved_b"]), (base, target))
+        self.assertTrue(report["ignore_whitespace"])
+        self.assertNotIn("files", report)

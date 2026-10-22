@@ -48,6 +48,9 @@ class DiffLineage:
     stat: str
     paths: list[str] = field(default_factory=list)
     rename_threshold: int = 50
+    resolved_a: str = ""
+    resolved_b: str = ""
+    ignore_whitespace: bool = False
 
     @property
     def summary(self) -> dict[str, Any]:
@@ -64,6 +67,9 @@ class DiffLineage:
             "repo": self.repo,
             "commit_a": self.commit_a,
             "commit_b": self.commit_b,
+            "resolved_a": self.resolved_a,
+            "resolved_b": self.resolved_b,
+            "ignore_whitespace": self.ignore_whitespace,
             "files": self.files,
             "stat": self.stat,
             "summary": self.summary,
@@ -328,6 +334,9 @@ class GitTracer:
             repo=self.root(),
             commit_a=commit_a,
             commit_b=commit_b,
+            resolved_a=base,
+            resolved_b=target,
+            ignore_whitespace=self.ignore_whitespace,
             files=files,
             stat=stat.rstrip(),
             paths=selected_paths,

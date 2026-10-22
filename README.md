@@ -203,3 +203,6 @@ repository activity rather than combining several files into a single lineage.
 
 History reports record both the requested ref and its immutable `resolved_ref`
 commit ID, making saved results auditable after branches or tags move.
+
+Diff reports, including `--summary`, preserve `resolved_a`, `resolved_b`, and
+whitespace/rename settings alongside the requested comparison refs.

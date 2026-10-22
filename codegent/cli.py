@@ -252,8 +252,9 @@ def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
 def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths)
     if args.summary:
-        report = {"repo": diff.repo, "commit_a": diff.commit_a, "commit_b": diff.commit_b,
-                  "paths": diff.paths, "summary": diff.summary}
+        report = diff.to_dict()
+        report.pop("files")
+        report.pop("stat")
         if args.json_output or args.markdown:
             return report
         summary = diff.summary
