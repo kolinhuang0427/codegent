@@ -56,6 +56,7 @@ class DiffLineage:
     paths: list[str] = field(default_factory=list)
     rename_threshold: int = 50
     merge_base: bool = False
+    find_copies: bool = False
     input_a_resolved: str = ""
     resolved_a: str = ""
     resolved_b: str = ""
@@ -78,6 +79,7 @@ class DiffLineage:
             "commit_b": self.commit_b,
             "resolved_a": self.resolved_a,
             "merge_base": self.merge_base,
+            "find_copies": self.find_copies,
             "input_a_resolved": self.input_a_resolved,
             "resolved_b": self.resolved_b,
             "ignore_whitespace": self.ignore_whitespace,
@@ -382,7 +384,7 @@ class GitTracer:
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
-    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False) -> DiffLineage:
+    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False) -> DiffLineage:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
@@ -394,9 +396,14 @@ class GitTracer:
             if len(bases) != 1:
                 raise GitError("comparison requires exactly one merge base; choose explicit refs")
             base = bases[0]
-        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
-        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
-        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
+        detection = [f"--find-renames={self.rename_threshold}%"]
+        if find_copies:
+            detection.extend([f"--find-copies={self.rename_threshold}%", "--find-copies-harder"])
+        shared = ["diff", "--no-ext-diff", "--no-textconv", *detection]
+        refs = [base, target, "--", *selected_paths]
+        stat = self.git([*shared, "--stat", *refs])
+        numstat = self.git([*shared, "--numstat", "-z", *refs])
+        name_status = self.git([*shared, "--name-status", "-z", *refs])
         files = self._merge_diff_outputs(numstat, name_status)
         return DiffLineage(
             repo=self.root(),
@@ -404,6 +411,7 @@ class GitTracer:
             commit_b=commit_b,
             resolved_a=base,
             merge_base=merge_base,
+            find_copies=find_copies,
             input_a_resolved=input_a_resolved,
             resolved_b=target,
             ignore_whitespace=self.ignore_whitespace,
@@ -511,8 +519,12 @@ class GitTracer:
             })
             entry["status"] = self._status_name(status)
             if old_path is not None:
-                entry["renamed_from"] = old_path
-                entry["renamed_to"] = path
+                if status.startswith("C"):
+                    entry.pop("renamed_from", None)
+                    entry.pop("renamed_to", None)
+                    entry["copied_from"], entry["copied_to"] = old_path, path
+                else:
+                    entry["renamed_from"], entry["renamed_to"] = old_path, path
         return list(stats_by_path.values())
 
     def _status_name(self, status: str) -> str:

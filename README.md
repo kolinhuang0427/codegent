@@ -246,3 +246,7 @@ are rejected before preview, and the size limit applies before line selection.
 `diff BASE TARGET --merge-base` compares the unique common ancestor to TARGET,
 matching a branch-review view. Requested refs and effective immutable comparison
 commits are recorded separately. Unrelated histories or multiple merge bases fail explicitly.
+
+`diff --find-copies` enables Git copy detection, including unchanged source
+files. Copies carry `copied_from`/`copied_to`, distinct from rename metadata.
+This optional search uses the configured similarity threshold and can cost more on large trees.

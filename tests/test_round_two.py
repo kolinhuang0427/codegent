@@ -249,3 +249,17 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(report["resolved_a"], common)
         self.assertEqual(report["input_a_resolved"], main_tip)
         self.assertTrue(report["merge_base"])
+
+    def test_diff_distinguishes_copies_from_renames(self):
+        self.write("original.py")
+        base = self.commit()
+        self.write("copy.py")
+        self.commit()
+        self.assertEqual(self.payload("diff", base, "HEAD")["files"][0]["status"], "added")
+        report = self.payload("diff", base, "HEAD", "--find-copies")
+        item, = report["files"]
+        self.assertEqual(item["status"], "copied")
+        self.assertEqual(item["copied_from"], "original.py")
+        self.assertEqual(item["copied_to"], "copy.py")
+        self.assertNotIn("renamed_from", item)
+        self.assertEqual(report["summary"]["statuses"], {"copied": 1})

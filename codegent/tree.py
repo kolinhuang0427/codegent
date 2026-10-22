@@ -135,6 +135,8 @@ def render_diff_lineage(diff: DiffLineage, *, color: bool = True) -> str:
         moved = ""
         if status == "renamed":
             moved = f" ({item.get('renamed_from')} -> {item.get('renamed_to')})"
+        elif status == "copied":
+            moved = f" (copy {item.get('copied_from')} -> {item.get('copied_to')})"
         lines.append(
             "  "
             + f"├─ {role(status, color)} {path}{moved} "
