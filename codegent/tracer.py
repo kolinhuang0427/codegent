@@ -221,6 +221,7 @@ class GitTracer:
         allow_empty: bool = False,
         first_parent: bool = False,
         newest_first: bool = False,
+        exclude_ref: str | None = None,
     ) -> Bloodline:
         positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
@@ -269,7 +270,12 @@ class GitTracer:
             args.append(f"--until={selection['until']}")
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits + 1}")
-        args.extend([resolved, "--", path])
+        args.append(resolved)
+        if exclude_ref is not None:
+            excluded = self.resolve_ref(exclude_ref)
+            selection.update(excluded_ref=exclude_ref, excluded_resolved=excluded)
+            args.append(f"^{excluded}")
+        args.extend(["--", path])
 
         output = self.git(args)
         newest_commits = self._parse_log(output)
@@ -311,7 +317,9 @@ class GitTracer:
                            "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)", *scopes[kind]])
         rows = []
         try:
-            for record in output.splitlines():
+            for record in output.split("\n"):
+                if not record:
+                    continue
                 name, oid, object_type, peeled, peeled_type = record.split("\0")
                 namespace = name.split("/")[1]
                 rows.append({"ref": name, "short_name": "/".join(name.split("/")[2:]),

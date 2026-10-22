@@ -299,3 +299,7 @@ unborn. A missing default HEAD still produces a structured invalid-ref error.
 `refs --kind branch|tag|remote|all --limit 1000` lists available references and
 object IDs, including annotated-tag object and peeled-target metadata. It works
 without a current HEAD and does not expose remote URLs.
+
+`commits BASE TARGET --path src --newest-first` lists selected commits reachable
+from TARGET but not BASE, with immutable bounds, history filters, and explicit
+truncation/selection metadata. Equal bounds produce an empty report.

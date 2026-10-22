@@ -196,3 +196,22 @@ def render_refs(report: dict[str, Any]) -> str:
     lines.extend(f"{row['kind']}  {row['ref']}  {row['object_type']}  {row['object_id']}" for row in report["refs"])
     lines.append(f"Showing {len(report['refs'])} of {report['total_refs']} references")
     return "\n".join(lines) + "\n"
+
+
+def commit_range_report(history: Bloodline) -> dict[str, Any]:
+    commits = [dict(commit.to_dict(), role="selected") for commit in history.display_commits]
+    return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
+            "resolved_ref": history.resolved_ref, "commit_a": history.selection["excluded_ref"],
+            "commit_b": history.requested_ref, "excluded_resolved": history.selection["excluded_resolved"],
+            "selection": history.selection, "truncated": history.truncated, "shallow": history.shallow,
+            "range_complete": not (history.truncated or history.shallow) and set(history.selection) <= {"excluded_ref", "excluded_resolved"},
+            "warnings": [warning for warning in history.warnings if not warning.startswith("The earliest observed")],
+            "order": "newest-first" if history.newest_first else "oldest-first", "total_commits": len(commits), "commits": commits}
+
+
+@safe_display
+def render_commits(report: dict[str, Any]) -> str:
+    lines = [f"Commits in {report['commit_b']} excluding {report['commit_a']}: {report['total_commits']}"]
+    lines.extend(f"{row['short_hash']}  {row['author_name']}  {row['message']}" for row in report["commits"])
+    lines.extend(f"Warning: {warning}" for warning in report["warnings"])
+    return "\n".join(lines) + "\n"

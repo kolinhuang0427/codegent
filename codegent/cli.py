@@ -17,7 +17,7 @@ from .exports import render_markdown
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -177,6 +177,12 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     refs.add_argument("--limit", type=positive_int, default=1000)
     refs.set_defaults(handler=_cmd_refs)
 
+    commits = subparsers.add_parser("commits", parents=[common], help="List commits reachable from TARGET but not BASE")
+    commits.add_argument("base")
+    commits.add_argument("target")
+    commits.add_argument("--path", default=".", help="Optional literal file or directory scope")
+    commits.set_defaults(handler=_cmd_commits)
+
     return parser
 
 
@@ -199,12 +205,13 @@ def main(argv: list[str] | None = None) -> int:
         "hotspots": {"follow"},
         "timeline": {"follow"},
         "cochange": {"follow"},
+        "commits": {"ref", "follow"},
         "refs": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "doctor": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
-    if args.command not in {"trace", "ancestry", "genemap", "bloodline"}:
+    if args.command not in {"trace", "ancestry", "genemap", "bloodline", "commits"}:
         invalid = invalid | {"newest_first"}
     unsupported = sorted(provided & invalid)
     if unsupported:
@@ -397,6 +404,12 @@ def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).refs(kind=args.kind, limit=args.limit)
     return report if args.json_output or args.markdown else render_refs(report)
+
+
+def _cmd_commits(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    history = _tracer(args).repository_history(args.path, args.target, exclude_ref=args.base, **_history_options(args))
+    report = commit_range_report(history)
+    return report if args.json_output or args.markdown else render_commits(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:
