@@ -315,3 +315,5 @@ History JSON preserves both dates; Git since/until filters retain committer-date
 semantics regardless of the display basis.
 
 `timeline --fill-gaps` inserts empty periods only between the first and last selected dates. `--max-periods N` (default 1000) bounds all timeline rows and fails explicitly when exceeded; use date filters or a larger budget.
+
+`files --sort size` ranks by descending blob bytes, then path, with unknown sizes last. Limits apply after sorting. `total_bytes` sums known sizes; `unknown_size_entries` counts entries without a blob size.

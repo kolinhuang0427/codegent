@@ -341,13 +341,17 @@ class GitTracer:
                 "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "-z"])),
                 "timeout_seconds": self.timeout}
 
-    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000) -> dict[str, Any]:
+    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000, sort: str = "path") -> dict[str, Any]:
         positive_count(limit, "limit")
+        if sort not in {"path", "size"}:
+            raise GitError("file sort must be path or size")
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
         output = self.git(["ls-tree", "-r", "-l", "-z", "--full-tree", resolved, "--", path])
         files = self._parse_tree(output)
+        files.sort(key=lambda item: (item["path"],) if sort == "path" else (item["size"] is None, -(item["size"] or 0), item["path"]))
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
+                "sort": sort, "unknown_size_entries": sum(item["size"] is None for item in files),
                 "total_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
                 "truncated": len(files) > limit, "files": files[:limit]}
 

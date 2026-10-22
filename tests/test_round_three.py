@@ -179,3 +179,16 @@ class RoundThreeTests(RepositoryCase):
         self.assertIn("max-periods", result.stderr)
         for period in ("day", "year"):
             self.assertTrue(self.payload("timeline", "--fill-gaps", "--period", period)["fill_gaps"])
+
+    def test_file_size_sort_precedes_limit(self):
+        self.write("a", "small")
+        self.write("b", "larger content")
+        self.write("c", "small")
+        self.commit()
+        report = self.payload("files", "--sort", "size", "--limit", "1")
+        self.assertEqual(report["files"][0]["path"], "b")
+        self.assertEqual(report["total_files"], 3)
+        self.assertEqual(report["total_bytes"], 24)
+        self.assertTrue(report["truncated"])
+        self.assertEqual([r["path"] for r in self.payload("files", "--sort", "size")["files"]], ["b", "a", "c"])
+        self.assertEqual([r["path"] for r in self.payload("files")["files"]], ["a", "b", "c"])
