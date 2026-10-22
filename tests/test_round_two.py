@@ -324,3 +324,15 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(second.returncode, 1)
         self.assertEqual(target.read_text(), saved)
         self.assertEqual(list(self.repo.glob(".codegent-*")), [])
+
+    def test_replacing_an_export_preserves_regular_file_access_permissions(self):
+        import stat
+        self.write("file.py")
+        self.commit()
+        target = self.repo / "report.json"
+        target.write_text("old")
+        target.chmod(0o640)
+        result = self.cli("trace", "file.py", "--json", "--output", str(target))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
+        self.assertEqual(json.loads(target.read_text())["total_commits"], 1)

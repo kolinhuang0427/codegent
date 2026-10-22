@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import stat
 from functools import partial
 import sys
 from typing import Any, Callable
@@ -225,11 +226,18 @@ def _write_output(text: str, destination: str | None, *, no_clobber: bool = Fals
     target = Path(destination).expanduser()
     temporary: str | None = None
     try:
+        try:
+            target_stat = target.lstat()
+            existing_mode = target_stat.st_mode & 0o777 if stat.S_ISREG(target_stat.st_mode) else None
+        except FileNotFoundError:
+            existing_mode = None
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
                                          dir=target.parent, prefix=".codegent-", delete=False) as stream:
             temporary = stream.name
             stream.write(text)
             stream.flush()
+            if existing_mode is not None and not no_clobber:
+                os.fchmod(stream.fileno(), existing_mode)
             os.fsync(stream.fileno())
         if no_clobber:
             os.link(temporary, target)  # Atomic exclusive creation on the same filesystem.

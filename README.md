@@ -269,3 +269,6 @@ structured data as indented JSON. It works with stdout and atomic file exports.
 `--output report.json --json --no-clobber` atomically creates a new export
 without replacing an existing destination, including during concurrent writes.
 A file destination is required; temporary export files are cleaned up on failure.
+
+Replacing an existing regular report file preserves its access permission bits.
+New reports use restrictive temporary-file permissions; special mode bits are not copied.
