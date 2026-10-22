@@ -108,6 +108,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     authors.add_argument("path")
     authors.add_argument("--group-by", choices=("identity", "email"), default="identity", help="Combine name variants sharing an email")
     authors.add_argument("--sort", choices=("commits", "churn", "name"), default="commits")
+    authors.add_argument("--min-commits", type=positive_int, default=1)
     authors.add_argument("--limit", type=positive_int, default=20)
     authors.set_defaults(handler=_cmd_authors)
 
@@ -271,7 +272,7 @@ def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_authors(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = author_report(_history(args), sort=args.sort, limit=args.limit, group_by=args.group_by)
+    report = author_report(_history(args), sort=args.sort, limit=args.limit, group_by=args.group_by, min_commits=args.min_commits)
     return report if args.json_output or args.markdown else render_authors(report)
 
 

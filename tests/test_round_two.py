@@ -168,3 +168,16 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(report["total_authors"], 1)
         self.assertEqual(report["authors"][0]["commits"], 2)
         self.assertEqual(len(report["authors"][0]["identities"]), 2)
+
+    def test_author_thresholds_disclose_omitted_contributors(self):
+        self.write("file.py")
+        self.commit()
+        self.write("file.py", "second\n")
+        self.commit()
+        self.write("file.py", "third\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        report = self.payload("authors", "file.py", "--min-commits", "2")
+        self.assertEqual(report["total_authors"], 2)
+        self.assertEqual(report["matching_authors"], 1)
+        self.assertEqual(report["omitted_authors"], 1)
+        self.assertEqual(report["authors"][0]["commits"], 2)

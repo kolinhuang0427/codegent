@@ -9,8 +9,9 @@ from .models import Bloodline
 from .tracer import iso_date, positive_count, GitError
 
 
-def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20, group_by: str = "identity") -> dict[str, Any]:
+def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20, group_by: str = "identity", min_commits: int = 1) -> dict[str, Any]:
     positive_count(limit, "limit")
+    positive_count(min_commits, "min_commits")
     if sort not in {"commits", "churn", "name"}:
         raise GitError("invalid author sort; choose commits, churn, or name")
     if group_by not in {"identity", "email"}:
@@ -34,14 +35,16 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
             row["last_seen"] = commit.date
     for row in authors.values():
         row["churn"] = row["additions"] + row["deletions"]
-    rows = sorted(authors.values(), key=lambda row: (
+    rows = sorted((row for row in authors.values() if row["commits"] >= min_commits), key=lambda row: (
         0 if sort == "name" else -row[sort], row["author"].casefold(), row["author"],
     ))
     return {
         "path": bloodline.path, "repo": bloodline.repo, "requested_ref": bloodline.requested_ref, "resolved_ref": bloodline.resolved_ref,
         "history_complete": bloodline.history_complete, "warnings": bloodline.warnings,
         "selection": bloodline.selection, "total_commits": len(bloodline.commits),
-        "total_authors": len(rows), "authors": rows[:limit], "sort": sort, "group_by": group_by,
+        "total_authors": len(authors), "matching_authors": len(rows), "displayed_authors": len(rows[:limit]),
+        "omitted_authors": len(authors) - len(rows[:limit]), "min_commits": min_commits,
+        "authors": rows[:limit], "sort": sort, "group_by": group_by,
     }
 
 
@@ -49,6 +52,7 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
 def render_authors(report: dict[str, Any]) -> str:
     lines = [f"Authors: {report['path']}", "Commits  Churn  Author"]
     lines.extend(f"{row['commits']:7}  {row['churn']:5}  {row['author']}" for row in report["authors"])
+    lines.append(f"Showing {report['displayed_authors']} of {report['total_authors']} authors (minimum {report['min_commits']} commits)")
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
 

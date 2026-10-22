@@ -222,3 +222,6 @@ deleted historical names. `--ref` controls the tree used for this filter.
 `authors --group-by email` combines recorded name variants sharing an email
 address. JSON retains the original `identities` in each group. Identity grouping
 remains the default; `.mailmap` is still available for explicit alias mappings.
+
+`authors --min-commits 3 --limit 10` focuses a contribution report while retaining
+total, matching, displayed, and omitted author counts so filtered rows stay explicit.
