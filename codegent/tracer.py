@@ -418,9 +418,11 @@ class GitTracer:
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 
-    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False, detect_copies: bool = False, max_bytes: int = 1048576) -> dict[str, Any]:
+    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False, detect_copies: bool = False, group_by: str = "author", max_bytes: int = 1048576) -> dict[str, Any]:
         path = self.normalize_path(path)
         commit = self.resolve_ref(ref)
+        if group_by not in {"author", "commit"}:
+            raise GitError("ownership grouping must be author or commit")
         source, size = self._text_blob(commit, path, max_bytes=max_bytes, purpose="line ownership")
         file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
         args = ["blame", "--line-porcelain"]
@@ -445,9 +447,9 @@ class GitTracer:
                 raise GitError("line range is outside the file")
             args.extend(["-L", f"{start},{end}"])
         args.extend([commit, "--", path])
-        owners = self._parse_blame(self.git(args))
+        owners = self._parse_blame(self.git(args), group_by=group_by)
         total = sum(row["lines"] for row in owners.values())
-        rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"]))
+        rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"], row.get("commit", "")))
         for row in rows:
             row["commits"] = sorted(row["commits"])
             row["percentage"] = round(row["lines"] * 100 / total, 2) if total else 0
@@ -456,16 +458,16 @@ class GitTracer:
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
                 "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines, "size": size, "max_bytes": max_bytes,
-                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves, "detect_copies": detect_copies,
+                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves, "detect_copies": detect_copies, "group_by": group_by,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
-    def _parse_blame(self, output: str) -> dict[str, dict[str, Any]]:
+    def _parse_blame(self, output: str, *, group_by: str = "author") -> dict[str, dict[str, Any]]:
         try:
-            return self._decode_blame(output)
+            return self._decode_blame(output, group_by=group_by)
         except (ValueError, IndexError, KeyError) as exc:
             raise GitError("cannot parse Git blame metadata") from exc
 
-    def _decode_blame(self, output: str) -> dict[str, dict[str, Any]]:
+    def _decode_blame(self, output: str, *, group_by: str = "author") -> dict[str, dict[str, Any]]:
         owners: dict[str, dict[str, Any]] = {}
         current: dict[str, str] = {}
         for line in output.split("\n"):
@@ -479,7 +481,10 @@ class GitTracer:
                 current["email"] = line[12:].strip("<>")
             elif line.startswith("\t"):
                 identity = f"{current['name']} <{current['email']}>"
-                row = owners.setdefault(identity, {"author": identity, "lines": 0, "boundary_lines": 0, "commits": set()})
+                key = current["commit"] if group_by == "commit" else identity
+                row = owners.setdefault(key, {"author": identity, "lines": 0, "boundary_lines": 0, "commits": set()})
+                if group_by == "commit":
+                    row["commit"] = current["commit"]
                 row["lines"] += 1
                 row["boundary_lines"] += int(current.get("boundary") == "true")
                 row["commits"].add(current["commit"])

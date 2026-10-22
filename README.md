@@ -321,3 +321,5 @@ semantics regardless of the display basis.
 `files --kind all|file|executable|symlink|submodule` filters Git tree modes before sorting and limiting; `file` means non-executable regular files. `total_files` precedes the kind filter, while `matching_files`, known `total_bytes`, and `unknown_size_entries` describe the filtered selection before the display limit.
 
 `owners --detect-copies` enables Git blame `-C -C` to look for copied blocks across files, including other files when the target was created. This heuristic can be expensive and is independent of `--detect-moves`; attribution is not a claim of legal ownership.
+
+`owners --group-by commit` separates the surviving lines attributed to each commit, even for the same author. The default remains author grouping. Commit groups include full object IDs and the same selected-line percentage denominator.

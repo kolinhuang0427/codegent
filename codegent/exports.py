@@ -39,8 +39,9 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching paths.",
                   _cell(report["path_policy"])]
     elif command == "owners":
-        lines += _table(["Author", "Lines", "Percent"], [
-            [row[key] for key in ("author", "lines", "percentage")] for row in report["owners"]])
+        keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])
+        lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []), [
+            [row[key] for key in keys] for row in report["owners"]])
         lines += ["", _cell(report["attribution"])]
     elif command == "patch":
         preview = "\n".join(escape_text(line) for line in report["patch"].split("\n"))

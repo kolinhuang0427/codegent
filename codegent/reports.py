@@ -100,7 +100,7 @@ def render_hotspots(report: dict[str, Any]) -> str:
 @safe_display
 def render_owners(report: dict[str, Any]) -> str:
     lines = [f"Line ownership: {report['path']} ({report['selected_lines']} lines)", "Lines  Percent  Author"]
-    lines.extend(f"{row['lines']:5}  {row['percentage']:6.2f}%  {row['author']}" for row in report["owners"])
+    lines.extend(f"{row['lines']:5}  {row['percentage']:6.2f}%  {row['author']}" + (f"  {row['commit']}" if "commit" in row else "") for row in report["owners"])
     lines.extend(f"Warning: {warning}" for warning in report.get("warnings", []))
     lines.append(report["attribution"])
     return "\n".join(lines) + "\n"

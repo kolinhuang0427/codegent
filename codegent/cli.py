@@ -153,6 +153,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     owners.add_argument("--detect-copies", action="store_true", help="Use Git cross-file copy attribution heuristics (may be slow)")
     owners.add_argument("--ignore-revs-file", help="Ignore listed mechanical commits when attributing lines")
     owners.add_argument("--lines", help="Inclusive START:END line range")
+    owners.add_argument("--group-by", choices=("author", "commit"), default="author")
     owners.set_defaults(handler=_cmd_owners)
 
     timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author-date periods")
@@ -390,7 +391,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, detect_copies=args.detect_copies, max_bytes=args.max_bytes)
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, detect_copies=args.detect_copies, group_by=args.group_by, max_bytes=args.max_bytes)
     return report if args.json_output or args.markdown else render_owners(report)
 
 

@@ -221,3 +221,18 @@ class RoundThreeTests(RepositoryCase):
         self.assertEqual(detected["owners"][0]["commits"], [original])
         self.assertTrue(detected["detect_copies"])
         self.assertFalse(detected["detect_moves"])
+
+    def test_ownership_can_group_surviving_lines_by_commit(self):
+        self.write("a", "first line\n")
+        first = self.commit("first")
+        self.write("a", "first line\nsecond line\n")
+        second = self.commit("second")
+        self.assertEqual(len(self.payload("owners", "a")["owners"]), 1)
+        report = self.payload("owners", "a", "--group-by", "commit")
+        self.assertEqual({r["commit"] for r in report["owners"]}, {first, second})
+        self.assertEqual([r["lines"] for r in report["owners"]], [1, 1])
+        self.assertEqual(sum(r["percentage"] for r in report["owners"]), 100)
+        for flag in ("--markdown", "--no-color"):
+            result = self.cli("owners", "a", "--group-by", "commit", flag)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(first, result.stdout)
