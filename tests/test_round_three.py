@@ -69,3 +69,14 @@ class RoundThreeTests(RepositoryCase):
             self.assertEqual(result.returncode, 1, result.stderr)
             self.assertIn("cannot parse Git", json.loads(result.stderr)["error"])
             self.assertNotIn("Traceback", result.stderr)
+
+    def test_markdown_author_exports_disclose_grouping_and_omitted_rows(self):
+        self.write("file.py")
+        self.commit()
+        self.write("file.py", "changed\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        result = self.cli("authors", "file.py", "--limit", "1", "--group-by", "email", "--markdown")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("Showing 1 of 2 author groups", result.stdout)
+        self.assertIn("omitted: 1", result.stdout)
+        self.assertIn("Grouping: email", result.stdout)

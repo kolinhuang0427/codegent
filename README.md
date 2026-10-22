@@ -288,3 +288,7 @@ semantic authorship. It combines with whitespace and ignored-revision options.
 `owners --max-bytes N` checks blob size before reading attribution content or
 selecting lines. Ownership and source previews share a 1 MiB default text-blob
 bound; directory objects and binary blobs are rejected explicitly.
+
+Markdown exports disclose author grouping and omitted contributors, ranked-path
+limits, cochange denominators, and status-filtered comparison counts alongside
+the displayed rows.
