@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from typing import Any
+from fnmatch import fnmatchcase
 
 from .display import safe_display
 from .models import Bloodline
@@ -47,7 +48,7 @@ def render_authors(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1) -> dict[str, Any]:
+def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1, excludes: list[str] | None = None) -> dict[str, Any]:
     positive_count(limit, "limit")
     positive_count(min_commits, "min_commits")
     if sort not in {"commits", "churn"}:
@@ -64,13 +65,14 @@ def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", 
             row["binary_changes"] += int(item["binary"])
     for row in files.values():
         row["churn"] = row["additions"] + row["deletions"]
-    rows = sorted((row for row in files.values() if row["commits"] >= min_commits),
+    rows = sorted((row for row in files.values() if row["commits"] >= min_commits
+                   and not any(fnmatchcase(row["path"], pattern) for pattern in (excludes or []))),
                   key=lambda row: (-row[sort], row["path"]))
     return {
         "repo": history.repo, "path": history.path, "requested_ref": history.requested_ref, "resolved_ref": history.resolved_ref,
         "history_complete": history.history_complete, "warnings": history.warnings,
         "selection": history.selection, "scanned_commits": len(history.commits),
-        "matching_files": len(rows), "files": rows[:limit], "sort": sort,
+        "matching_files": len(rows), "files": rows[:limit], "sort": sort, "excludes": excludes or [],
         "path_policy": "historical names are counted separately across renames",
     }
 

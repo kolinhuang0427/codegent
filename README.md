@@ -212,3 +212,6 @@ baseline is unavailable. Binary transitions also make cumulative line estimates 
 
 `--grep "literal text"` filters history-based reports by commit-message substring,
 including message bodies. It combines with date and author filters.
+
+`hotspots --exclude "vendor/*" --exclude "build/*"` removes root-relative
+path globs from the ranking. These patterns filter report rows; traced paths remain literal.

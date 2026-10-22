@@ -137,3 +137,12 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(report["selection"]["grep"], "[parser]")
         self.assertFalse(report["origin_confirmed"])
         self.assertEqual(self.payload("hotspots", "--grep", "[parser]")["scanned_commits"], 1)
+
+    def test_hotspots_can_exclude_generated_or_vendor_path_globs(self):
+        self.write("src/file.py")
+        self.write("vendor/generated.py")
+        self.write("build/output.py")
+        self.commit()
+        report = self.payload("hotspots", "--exclude", "vendor/*", "--exclude", "build/*")
+        self.assertEqual([row["path"] for row in report["files"]], ["src/file.py"])
+        self.assertEqual(report["excludes"], ["vendor/*", "build/*"])
