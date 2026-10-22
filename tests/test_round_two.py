@@ -62,3 +62,19 @@ class RoundTwoTests(RepositoryCase):
         result = self.payload("trace", "file.py")
         self.assertEqual(result["total_commits"], 1)
         self.assertEqual(result["total_additions"], 3)
+
+    def test_malformed_git_output_returns_a_json_error(self):
+        import shlex
+        import shutil
+        self.write("file.py")
+        self.commit()
+        wrapper = self.repo / "wrapper"
+        wrapper.mkdir()
+        fake = wrapper / "git"
+        real_git = shlex.quote(shutil.which("git"))
+        fake.write_text("#!/bin/sh\ncase \" $* \" in\n*\" log \"*) printf '\\000bad\\000';;\n*) exec " + real_git + " \"$@\";;\nesac\n")
+        fake.chmod(0o755)
+        result = self.cli("trace", "file.py", "--json", env={"PATH": str(wrapper) + os.pathsep + os.environ["PATH"]})
+        self.assertEqual(result.returncode, 1, result.stderr)
+        self.assertIn("cannot parse Git history", json.loads(result.stderr)["error"])
+        self.assertNotIn("Traceback", result.stderr)

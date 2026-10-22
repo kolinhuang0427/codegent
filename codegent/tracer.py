@@ -349,6 +349,12 @@ class GitTracer:
         return item, index
 
     def _parse_log(self, output: str) -> list[CommitNode]:
+        try:
+            return self._decode_log(output)
+        except (IndexError, ValueError, KeyError) as exc:
+            raise GitError("cannot parse Git history output") from exc
+
+    def _decode_log(self, output: str) -> list[CommitNode]:
         # NUL delimiters preserve whitespace, Unicode and control characters in paths.
         tokens = output.split("\0")
         commits: list[CommitNode] = []
@@ -395,6 +401,12 @@ class GitTracer:
                 commit.role = "descendant"
 
     def _merge_diff_outputs(self, numstat: str, name_status: str) -> list[dict[str, Any]]:
+        try:
+            return self._decode_diff(numstat, name_status)
+        except (IndexError, ValueError, KeyError) as exc:
+            raise GitError("cannot parse Git comparison output") from exc
+
+    def _decode_diff(self, numstat: str, name_status: str) -> list[dict[str, Any]]:
         stats_by_path: dict[str, dict[str, Any]] = {}
         tokens = numstat.split("\0")
         index = 0
