@@ -208,3 +208,16 @@ class RoundThreeTests(RepositoryCase):
             self.assertEqual(report["matching_files"], 1)
             self.assertEqual(report["unknown_size_entries"], int(kind == "submodule"))
             self.assertEqual(self.cli("files", "--kind", kind, "--markdown").returncode, 0)
+
+    def test_blame_cross_file_copy_attribution(self):
+        content = "".join(f"original_function_{n} = original_implementation_value_{n}\n" for n in range(20))
+        self.write("original.py", content)
+        original = self.commit("original")
+        self.write("copy.py", content)
+        copied = self.commit("copy", env={"GIT_AUTHOR_NAME": "Copy Author", "GIT_AUTHOR_EMAIL": "copy@example.test"})
+        default = self.payload("owners", "copy.py")
+        self.assertEqual(default["owners"][0]["commits"], [copied])
+        detected = self.payload("owners", "copy.py", "--detect-copies")
+        self.assertEqual(detected["owners"][0]["commits"], [original])
+        self.assertTrue(detected["detect_copies"])
+        self.assertFalse(detected["detect_moves"])

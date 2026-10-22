@@ -319,3 +319,5 @@ semantics regardless of the display basis.
 `files --sort size` ranks by descending blob bytes, then path, with unknown sizes last. Limits apply after sorting. `total_bytes` sums known sizes; `unknown_size_entries` counts entries without a blob size.
 
 `files --kind all|file|executable|symlink|submodule` filters Git tree modes before sorting and limiting; `file` means non-executable regular files. `total_files` precedes the kind filter, while `matching_files`, known `total_bytes`, and `unknown_size_entries` describe the filtered selection before the display limit.
+
+`owners --detect-copies` enables Git blame `-C -C` to look for copied blocks across files, including other files when the target was created. This heuristic can be expensive and is independent of `--detect-moves`; attribution is not a claim of legal ownership.

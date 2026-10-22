@@ -418,7 +418,7 @@ class GitTracer:
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 
-    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False, max_bytes: int = 1048576) -> dict[str, Any]:
+    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False, detect_copies: bool = False, max_bytes: int = 1048576) -> dict[str, Any]:
         path = self.normalize_path(path)
         commit = self.resolve_ref(ref)
         source, size = self._text_blob(commit, path, max_bytes=max_bytes, purpose="line ownership")
@@ -426,6 +426,8 @@ class GitTracer:
         args = ["blame", "--line-porcelain"]
         if detect_moves:
             args.append("-M")
+        if detect_copies:
+            args.extend(["-C", "-C"])
         ignored_file = None
         if ignore_revs_file:
             ignored_file = os.path.abspath(os.path.join(self.path_base, os.path.expanduser(ignore_revs_file)))
@@ -454,7 +456,7 @@ class GitTracer:
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
                 "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines, "size": size, "max_bytes": max_bytes,
-                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves,
+                "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves, "detect_copies": detect_copies,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
     def _parse_blame(self, output: str) -> dict[str, dict[str, Any]]:
