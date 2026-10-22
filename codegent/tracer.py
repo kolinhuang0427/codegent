@@ -140,9 +140,15 @@ class GitTracer:
     def normalize_path(self, path: str) -> str:
         self.ensure_repository()
         absolute = os.path.abspath(os.path.join(self.path_base, path))
-        absolute = os.path.join(os.path.realpath(os.path.dirname(absolute)), os.path.basename(absolute))
         if os.path.commonpath([self.repo, absolute]) != self.repo:
-            raise GitError(f"path is outside the repository: {path!r}")
+            # Resolve aliases of the repository root, not tracked symlink parents.
+            ancestor = absolute
+            while os.path.realpath(ancestor) != self.repo:
+                parent = os.path.dirname(ancestor)
+                if parent == ancestor:
+                    raise GitError(f"path is outside the repository: {path!r}")
+                ancestor = parent
+            absolute = os.path.join(self.repo, os.path.relpath(absolute, ancestor))
         return os.path.relpath(absolute, self.repo).replace(os.sep, "/")
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
