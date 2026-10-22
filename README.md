@@ -292,3 +292,6 @@ bound; directory objects and binary blobs are rejected explicitly.
 Markdown exports disclose author grouping and omitted contributors, ranked-path
 limits, cochange denominators, and status-filtered comparison counts alongside
 the displayed rows.
+
+Explicit historical refs can be analyzed even when the checked-out branch is
+unborn. A missing default HEAD still produces a structured invalid-ref error.

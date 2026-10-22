@@ -92,3 +92,16 @@ class RoundThreeTests(RepositoryCase):
         self.assertEqual(invalid.returncode, 2)
         self.assertNotIn("Traceback", invalid.stderr)
         self.assertIn("unrecognized arguments", invalid.stderr)
+
+    def test_explicit_refs_work_when_the_checked_out_branch_is_unborn(self):
+        self.write("file.py")
+        first = self.commit()
+        self.git("tag", "saved")
+        self.git("checkout", "--orphan", "unborn")
+        report = self.payload("trace", "file.py", "--ref", "saved")
+        self.assertEqual(report["resolved_ref"], first)
+        self.assertEqual(self.payload("diff", "saved", "saved")["files"], [])
+        self.assertIsNone(self.payload("doctor")["head"])
+        missing_head = self.cli("trace", "file.py", "--json")
+        self.assertEqual(missing_head.returncode, 1)
+        self.assertIn("invalid commit/ref", json.loads(missing_head.stderr)["error"])

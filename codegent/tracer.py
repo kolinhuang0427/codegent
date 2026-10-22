@@ -224,8 +224,6 @@ class GitTracer:
     ) -> Bloodline:
         positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
-        if not self.has_commits():
-            raise GitRepositoryError("repository has no commits yet")
 
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
@@ -448,8 +446,6 @@ class GitTracer:
 
     def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
-        if not self.has_commits():
-            raise GitRepositoryError("repository has no commits yet")
         if statuses and any(status not in CHANGE_STATUSES for status in statuses):
             raise GitError("invalid comparison status filter")
         selected_statuses = sorted(set(statuses or []))
