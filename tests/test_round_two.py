@@ -113,3 +113,16 @@ class RoundTwoTests(RepositoryCase):
         (self.repo / "binary.dat").write_bytes(b"\0data")
         self.commit()
         self.assertIsNone(self.payload("trace", "binary.dat")["current_carried_lines"])
+
+    def test_python_api_rejects_boolean_fractional_and_invalid_limits(self):
+        self.write("file.py")
+        self.commit()
+        tracer = GitTracer(str(self.repo))
+        for limit in (True, 1.5, "10", -1):
+            with self.subTest(limit=limit), self.assertRaises(GitError):
+                tracer.trace_path("file.py", max_commits=limit)
+        for threshold in (True, 25.5, "50"):
+            with self.assertRaises(GitError):
+                GitTracer(str(self.repo), rename_threshold=threshold)
+        with self.assertRaises(GitError):
+            GitTracer(str(self.repo), timeout=True)

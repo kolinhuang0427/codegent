@@ -5,10 +5,13 @@ from typing import Any
 
 from .display import safe_display
 from .models import Bloodline
-from .tracer import iso_date
+from .tracer import iso_date, positive_count, GitError
 
 
 def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20) -> dict[str, Any]:
+    positive_count(limit, "limit")
+    if sort not in {"commits", "churn", "name"}:
+        raise GitError("invalid author sort; choose commits, churn, or name")
     authors: dict[str, dict[str, Any]] = {}
     for commit in bloodline.commits:
         row = authors.setdefault(commit.author, {
@@ -45,6 +48,10 @@ def render_authors(report: dict[str, Any]) -> str:
 
 
 def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1) -> dict[str, Any]:
+    positive_count(limit, "limit")
+    positive_count(min_commits, "min_commits")
+    if sort not in {"commits", "churn"}:
+        raise GitError("invalid hotspot sort; choose commits or churn")
     files: dict[str, dict[str, Any]] = {}
     for commit in history.commits:
         for item in commit.changes:

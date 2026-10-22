@@ -29,6 +29,13 @@ class PathNotFoundError(GitError):
     """Raised when a traced path has no history."""
 
 
+def positive_count(value: int | None, name: str, *, allow_none: bool = False) -> None:
+    if value is None and allow_none:
+        return
+    if type(value) is not int or value <= 0:
+        raise GitError(f"{name} must be a positive integer" + (" or None" if allow_none else ""))
+
+
 def iso_date(value: str) -> str:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -82,9 +89,9 @@ class GitTracer:
     """Trace file history through git using subprocess calls."""
 
     def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0, ignore_whitespace: bool = False, mailmap: bool = False) -> None:
-        if not 1 <= rename_threshold <= 100:
+        if type(rename_threshold) is not int or not 1 <= rename_threshold <= 100:
             raise GitError("rename threshold must be between 1 and 100")
-        if not math.isfinite(timeout) or timeout <= 0:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise GitError("timeout must be a positive finite number")
         self.mailmap = mailmap
         self.ignore_whitespace = ignore_whitespace
@@ -195,8 +202,7 @@ class GitTracer:
         allow_empty: bool = False,
         first_parent: bool = False,
     ) -> Bloodline:
-        if max_commits is not None and max_commits <= 0:
-            raise GitError("max_commits must be greater than zero or None")
+        positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
