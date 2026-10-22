@@ -193,3 +193,17 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual([row["period"] for row in report["periods"]], ["2026-02", "2026-03"])
         self.assertEqual([row["commits"] for row in report["periods"]], [2, 1])
         self.assertIn("# codegent timeline", self.cli("timeline", "--markdown").stdout)
+
+    def test_cochange_ranks_companions_without_claiming_dependencies(self):
+        for name in ("a.py", "b.py", "c.py"):
+            self.write(name)
+        self.commit()
+        self.write("a.py", "changed\n")
+        self.write("b.py", "changed\n")
+        self.commit()
+        result = self.payload("cochange", "a.py")
+        self.assertEqual(result["target_commits"], 2)
+        self.assertEqual([(r["path"], r["shared_commits"]) for r in result["files"]], [("b.py", 2), ("c.py", 1)])
+        filtered = self.payload("cochange", "a.py", "--min-shared", "2")
+        self.assertEqual(filtered["matching_files"], 1)
+        self.assertIn("not a dependency", filtered["interpretation"])

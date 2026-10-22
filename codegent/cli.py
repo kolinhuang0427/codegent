@@ -16,7 +16,7 @@ from .exports import render_markdown
 from .display import escape_text
 from ._version import __version__
 from .tracer import GitError, GitTracer
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -131,6 +131,12 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     timeline.add_argument("--period", choices=("day", "month", "year"), default="month")
     timeline.set_defaults(handler=_cmd_timeline)
 
+    cochange = subparsers.add_parser("cochange", parents=[common], help="Find files changed in the same commits as a target")
+    cochange.add_argument("path")
+    cochange.add_argument("--limit", type=positive_int, default=20)
+    cochange.add_argument("--min-shared", type=positive_int, default=1)
+    cochange.set_defaults(handler=_cmd_cochange)
+
     return parser
 
 
@@ -148,6 +154,7 @@ def main(argv: list[str] | None = None) -> int:
         "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
         "hotspots": {"follow"},
         "timeline": {"follow"},
+        "cochange": {"follow"},
     }.get(args.command, set())
     unsupported = sorted(provided & invalid)
     if unsupported:
@@ -301,6 +308,14 @@ def _cmd_timeline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
     report = timeline_report(history, period=args.period)
     return report if args.json_output or args.markdown else render_timeline(report)
+
+
+def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    tracer = _tracer(args)
+    path = tracer.normalize_path(args.path)
+    history = tracer.repository_history(tracer.root(), args.ref, **_history_options(args))
+    report = cochange_report(history, path, limit=args.limit, min_shared=args.min_shared)
+    return report if args.json_output or args.markdown else render_cochange(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

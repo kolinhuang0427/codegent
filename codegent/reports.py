@@ -136,3 +136,35 @@ def render_timeline(report: dict[str, Any]) -> str:
     lines.extend(f"{row['period']}  {row['commits']:7}  {row['authors']:7}  {row['files']:5}  {row['additions']:6}  {row['deletions']:6}" for row in report["periods"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
+
+
+def cochange_report(history: Bloodline, path: str, *, limit: int = 20, min_shared: int = 1) -> dict[str, Any]:
+    positive_count(limit, "limit")
+    positive_count(min_shared, "min_shared")
+    counts: dict[str, int] = {}
+    target_commits = 0
+    for commit in history.commits:
+        matches = lambda item: item["path"] == path or item.get("renamed_from") == path
+        if not any(matches(item) for item in commit.changes):
+            continue
+        target_commits += 1
+        companions = {item["path"] for item in commit.changes if not matches(item)}
+        for companion in companions:
+            counts[companion] = counts.get(companion, 0) + 1
+    rows = [{"path": candidate, "shared_commits": count, "fraction": round(count / target_commits, 4)}
+            for candidate, count in counts.items() if count >= min_shared]
+    rows.sort(key=lambda row: (-row["shared_commits"], row["path"]))
+    return {"repo": history.repo, "path": path, "requested_ref": history.requested_ref,
+            "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
+            "selection": history.selection, "warnings": history.warnings, "target_commits": target_commits,
+            "scanned_commits": len(history.commits), "matching_files": len(rows), "files": rows[:limit],
+            "interpretation": "same-commit co-occurrence, not a dependency or causal relationship"}
+
+
+@safe_display
+def render_cochange(report: dict[str, Any]) -> str:
+    lines = [f"Files changed with: {report['path']} ({report['target_commits']} target commits)", "Shared  Fraction  Path"]
+    lines.extend(f"{row['shared_commits']:6}  {row['fraction']:8.4f}  {row['path']}" for row in report["files"])
+    lines.extend(f"Warning: {warning}" for warning in report["warnings"])
+    lines.append(report["interpretation"])
+    return "\n".join(lines) + "\n"

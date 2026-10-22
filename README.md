@@ -229,3 +229,7 @@ total, matching, displayed, and omitted author counts so filtered rows stay expl
 `timeline [PATH] --period day|month|year` groups commit activity by UTC author
 date, including distinct authors/files and text/binary change counts. History
 filters still use their documented Git committer-date semantics.
+
+`cochange FILE --min-shared 2 --limit 10` ranks paths changed in the same commits
+as a literal historical filename. Rename entries match either side without treating
+the two names as separate companion files. Co-occurrence is not a dependency claim.
