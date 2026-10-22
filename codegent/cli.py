@@ -34,10 +34,20 @@ def positive_int(value: str) -> int:
     return number
 
 
+def _stream_text(message: str, stream) -> str:
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    return message.encode(encoding, "backslashreplace").decode(encoding)
+
+
 class ReportArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, json_errors: bool = False, **kwargs):
         self.json_errors = json_errors
         super().__init__(*args, **kwargs)
+
+    def _print_message(self, message, file=None):
+        stream = file or sys.stderr
+        if message:
+            super()._print_message(_stream_text(message, stream), stream)
 
     def error(self, message: str) -> None:
         if self.json_errors:
@@ -379,8 +389,6 @@ def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:
-    if json_output:
-        print(json.dumps({"error": message}), file=sys.stderr)
-    else:
-        print(danger(f"codegent: {escape_text(message)}", color), file=sys.stderr)
+    rendered = json.dumps({"error": message}) if json_output else danger(f"codegent: {escape_text(message)}", color)
+    print(_stream_text(rendered, sys.stderr), file=sys.stderr)
     return 1

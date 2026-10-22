@@ -80,3 +80,15 @@ class RoundThreeTests(RepositoryCase):
         self.assertIn("Showing 1 of 2 author groups", result.stdout)
         self.assertIn("omitted: 1", result.stdout)
         self.assertIn("Grouping: email", result.stdout)
+
+    def test_unicode_runtime_and_argument_errors_survive_ascii_stderr(self):
+        self.write("file.py")
+        self.commit()
+        result = self.cli("trace", "missing中文.py", env={"PYTHONIOENCODING": "ascii"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("no matching history", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+        invalid = self.cli("trace", "file.py", "--wrong中文", env={"PYTHONIOENCODING": "ascii"})
+        self.assertEqual(invalid.returncode, 2)
+        self.assertNotIn("Traceback", invalid.stderr)
+        self.assertIn("unrecognized arguments", invalid.stderr)
