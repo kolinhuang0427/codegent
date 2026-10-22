@@ -172,6 +172,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     files.add_argument("path", nargs="?", default=".")
     files.add_argument("--limit", type=positive_int, default=1000)
     files.add_argument("--sort", choices=("path", "size"), default="path")
+    files.add_argument("--kind", choices=("all", "file", "executable", "symlink", "submodule"), default="all")
     files.set_defaults(handler=_cmd_files)
 
     source = subparsers.add_parser("source", parents=[common], help="Preview a bounded text blob at a commit")
@@ -407,7 +408,7 @@ def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).tracked_files(args.path, args.ref, limit=args.limit, sort=args.sort)
+    report = _tracer(args).tracked_files(args.path, args.ref, limit=args.limit, sort=args.sort, kind=args.kind)
     return report if args.json_output or args.markdown else render_files(report)
 
 

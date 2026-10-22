@@ -58,7 +58,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
     elif command == "files":
         lines += _table(["Path", "Mode", "Type", "Bytes", "Object ID"], [
             [row[key] for key in ("path", "mode", "type", "size", "object_id")] for row in report["files"]])
-        lines += ["", f"Showing {len(report['files'])} of {report['total_files']} entries."]
+        lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching entries ({report['total_files']} before kind filter)."]
     elif command == "cochange":
         lines += _table(["Path", "Shared commits", "Fraction"], [
             [row[key] for key in ("path", "shared_commits", "fraction")] for row in report["files"]])

@@ -341,18 +341,23 @@ class GitTracer:
                 "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "-z"])),
                 "timeout_seconds": self.timeout}
 
-    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000, sort: str = "path") -> dict[str, Any]:
+    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000, sort: str = "path", kind: str = "all") -> dict[str, Any]:
         positive_count(limit, "limit")
         if sort not in {"path", "size"}:
             raise GitError("file sort must be path or size")
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
         output = self.git(["ls-tree", "-r", "-l", "-z", "--full-tree", resolved, "--", path])
+        modes = {"file": "100644", "executable": "100755", "symlink": "120000", "submodule": "160000"}
+        if kind not in {"all", *modes}:
+            raise GitError("file kind must be all, file, executable, symlink, or submodule")
         files = self._parse_tree(output)
+        total_files = len(files)
+        files = [item for item in files if kind == "all" or item["mode"] == modes[kind]]
         files.sort(key=lambda item: (item["path"],) if sort == "path" else (item["size"] is None, -(item["size"] or 0), item["path"]))
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
                 "sort": sort, "unknown_size_entries": sum(item["size"] is None for item in files),
-                "total_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
+                "kind": kind, "total_files": total_files, "matching_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
                 "truncated": len(files) > limit, "files": files[:limit]}
 
     def _parse_tree(self, output: str) -> list[dict[str, Any]]:

@@ -192,3 +192,19 @@ class RoundThreeTests(RepositoryCase):
         self.assertTrue(report["truncated"])
         self.assertEqual([r["path"] for r in self.payload("files", "--sort", "size")["files"]], ["b", "a", "c"])
         self.assertEqual([r["path"] for r in self.payload("files")["files"]], ["a", "b", "c"])
+
+    def test_file_kind_filters_git_modes(self):
+        self.write("plain", "plain\n")
+        self.write("run", "run\n")
+        os.chmod(self.repo / "run", 0o755)
+        os.symlink("plain", self.repo / "link")
+        tip = self.commit()
+        self.git("update-index", "--add", "--cacheinfo", f"160000,{tip},module")
+        self.git("commit", "-m", "add gitlink")
+        for kind, expected in (("file", "plain"), ("executable", "run"), ("symlink", "link"), ("submodule", "module")):
+            report = self.payload("files", "--kind", kind)
+            self.assertEqual([r["path"] for r in report["files"]], [expected])
+            self.assertEqual(report["total_files"], 4)
+            self.assertEqual(report["matching_files"], 1)
+            self.assertEqual(report["unknown_size_entries"], int(kind == "submodule"))
+            self.assertEqual(self.cli("files", "--kind", kind, "--markdown").returncode, 0)

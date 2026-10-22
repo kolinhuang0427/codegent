@@ -317,3 +317,5 @@ semantics regardless of the display basis.
 `timeline --fill-gaps` inserts empty periods only between the first and last selected dates. `--max-periods N` (default 1000) bounds all timeline rows and fails explicitly when exceeded; use date filters or a larger budget.
 
 `files --sort size` ranks by descending blob bytes, then path, with unknown sizes last. Limits apply after sorting. `total_bytes` sums known sizes; `unknown_size_entries` counts entries without a blob size.
+
+`files --kind all|file|executable|symlink|submodule` filters Git tree modes before sorting and limiting; `file` means non-executable regular files. `total_files` precedes the kind filter, while `matching_files`, known `total_bytes`, and `unknown_size_entries` describe the filtered selection before the display limit.
