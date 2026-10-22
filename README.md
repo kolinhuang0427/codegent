@@ -313,3 +313,5 @@ fences adapt to backticks in patch content. Binary changes use Git summaries.
 `timeline --date-basis author|committer` selects the UTC date used for buckets.
 History JSON preserves both dates; Git since/until filters retain committer-date
 semantics regardless of the display basis.
+
+`timeline --fill-gaps` inserts empty periods only between the first and last selected dates. `--max-periods N` (default 1000) bounds all timeline rows and fails explicitly when exceeded; use date filters or a larger budget.

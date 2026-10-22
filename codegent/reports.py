@@ -1,6 +1,7 @@
 """Maintainer reports derived from observed repository history."""
 from __future__ import annotations
 
+from datetime import date as calendar_date, timedelta
 from typing import Any
 from fnmatch import fnmatchcase
 
@@ -105,7 +106,8 @@ def render_owners(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author") -> dict[str, Any]:
+def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author", fill_gaps: bool = False, max_periods: int = 1000) -> dict[str, Any]:
+    positive_count(max_periods, "max_periods")
     widths = {"day": 10, "month": 7, "year": 4}
     if period not in widths:
         raise GitError("timeline period must be day, month, or year")
@@ -125,6 +127,27 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
         row["additions"] += commit.additions
         row["deletions"] += commit.deletions
         row["binary_changes"] += sum(int(item["binary"]) for item in commit.changes)
+    if fill_gaps and buckets:
+        first, last = min(buckets), max(buckets)
+        current = calendar_date.fromisoformat(first + {"day": "", "month": "-01", "year": "-01-01"}[period])
+        while True:
+            key = current.isoformat()[:widths[period]]
+            if key > last:
+                break
+            buckets.setdefault(key, {"period": key, "commits": 0, "authors": set(), "files": set(),
+                                     "additions": 0, "deletions": 0, "binary_changes": 0})
+            if len(buckets) > max_periods:
+                raise GitError("timeline exceeds --max-periods; increase the budget or narrow history")
+            if key == last:
+                break
+            if period == "day":
+                current += timedelta(days=1)
+            elif period == "month":
+                current = calendar_date(current.year + (current.month == 12), current.month % 12 + 1, 1)
+            else:
+                current = calendar_date(current.year + 1, 1, 1)
+    if len(buckets) > max_periods:
+        raise GitError("timeline exceeds --max-periods; increase the budget or narrow history")
     rows = [buckets[key] for key in sorted(buckets)]
     for row in rows:
         row["authors"] = len(row["authors"])
@@ -132,7 +155,7 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
     return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
             "selection": history.selection, "warnings": history.warnings, "period": period,
-            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "periods": rows}
+            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "fill_gaps": fill_gaps, "max_periods": max_periods, "periods": rows}
 
 
 @safe_display

@@ -164,3 +164,18 @@ class RoundThreeTests(RepositoryCase):
         self.assertEqual([row["period"] for row in committed["periods"]], ["2026-03"])
         self.assertEqual(committed["periods"][0]["commits"], 2)
         self.assertIn("committer_date", self.payload("trace", "file.py")["commits"][0])
+
+    def test_timeline_fills_observed_gaps_with_budget(self):
+        self.write("a")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-01-01T00:00:00Z"})
+        self.write("a", "changed\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-03-01T00:00:00Z"})
+        report = self.payload("timeline", "--fill-gaps")
+        self.assertEqual([r["period"] for r in report["periods"]], ["2024-01", "2024-02", "2024-03"])
+        self.assertEqual(report["periods"][1]["commits"], 0)
+        self.assertEqual(len(self.payload("timeline")["periods"]), 2)
+        result = self.cli("timeline", "--fill-gaps", "--max-periods", "2")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn("max-periods", result.stderr)
+        for period in ("day", "year"):
+            self.assertTrue(self.payload("timeline", "--fill-gaps", "--period", period)["fill_gaps"])
