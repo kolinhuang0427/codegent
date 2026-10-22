@@ -17,7 +17,7 @@ from .exports import render_markdown
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -156,6 +156,9 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     source.add_argument("--max-bytes", type=positive_int, default=1048576)
     source.set_defaults(handler=_cmd_source)
 
+    doctor = subparsers.add_parser("doctor", parents=[common], help="Inspect Git and worktree readiness without changing files")
+    doctor.set_defaults(handler=_cmd_doctor)
+
     return parser
 
 
@@ -178,6 +181,7 @@ def main(argv: list[str] | None = None) -> int:
         "hotspots": {"follow"},
         "timeline": {"follow"},
         "cochange": {"follow"},
+        "doctor": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
@@ -364,6 +368,11 @@ def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 def _cmd_source(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes)
     return report if args.json_output or args.markdown else render_source(report)
+
+
+def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).doctor()
+    return report if args.json_output or args.markdown else render_doctor(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

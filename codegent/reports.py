@@ -183,3 +183,8 @@ def render_source(report: dict[str, Any]) -> str:
     lines = [f"Source: {report['path']} at {report['resolved_ref'][:12]}"]
     lines.extend(f"{row['number']:6}  {row['text']}" for row in report["lines"])
     return "\n".join(lines) + "\n"
+
+
+@safe_display
+def render_doctor(report: dict[str, Any]) -> str:
+    return "Repository diagnostics\n" + "\n".join(f"{key}: {value}" for key, value in report.items()) + "\n"

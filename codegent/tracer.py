@@ -6,6 +6,8 @@ import os
 import math
 import re
 import subprocess
+import sys
+from ._version import __version__
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
@@ -296,6 +298,17 @@ class GitTracer:
             rename_threshold=self.rename_threshold,
             mailmap=self.mailmap,
         )
+
+    def doctor(self) -> dict[str, Any]:
+        git_version = self.git(["--version"]).strip()
+        self.ensure_repository()
+        head = self.resolve_ref("HEAD") if self.has_commits() else None
+        return {"repo": self.repo, "git_version": git_version, "package_version": __version__,
+                "python_version": sys.version.split()[0], "head": head,
+                "shallow": self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true",
+                "object_format": self.git(["rev-parse", "--show-object-format"]).strip(),
+                "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "-z"])),
+                "timeout_seconds": self.timeout}
 
     def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000) -> dict[str, Any]:
         positive_count(limit, "limit")

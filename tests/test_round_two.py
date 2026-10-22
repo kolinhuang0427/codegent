@@ -336,3 +336,16 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
         self.assertEqual(json.loads(target.read_text())["total_commits"], 1)
+
+    def test_doctor_handles_empty_clean_and_dirty_worktrees(self):
+        empty = self.payload("doctor")
+        self.assertIsNone(empty["head"])
+        self.assertTrue(empty["working_tree_clean"])
+        self.assertIn("git version", empty["git_version"])
+        self.write("file.py")
+        self.assertFalse(self.payload("doctor")["working_tree_clean"])
+        head = self.commit()
+        clean = self.payload("doctor")
+        self.assertTrue(clean["working_tree_clean"])
+        self.assertEqual(clean["head"], head)
+        self.assertIn("# codegent doctor", self.cli("doctor", "--markdown").stdout)

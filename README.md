@@ -272,3 +272,7 @@ A file destination is required; temporary export files are cleaned up on failure
 
 Replacing an existing regular report file preserves its access permission bits.
 New reports use restrictive temporary-file permissions; special mode bits are not copied.
+
+`doctor --json` reports Git/Python/package versions, committed HEAD, shallow
+state, object format, and worktree cleanliness without changing files. Empty
+worktrees are supported. Diagnostics do not expose remote URLs or credentials.
