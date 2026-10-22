@@ -222,3 +222,15 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(rows[name]["size"], 4)
         self.assertEqual(rows["tool.sh"]["mode"], "100755")
         self.assertTrue(self.payload("files", "--limit", "1")["truncated"])
+
+    def test_source_previews_committed_text_with_line_and_byte_bounds(self):
+        self.write("file.py", "one\ntwo\nthree")
+        original = self.commit()
+        self.write("file.py", "uncommitted\n")
+        report = self.payload("source", "file.py", "--ref", original, "--lines", "2:2")
+        self.assertEqual(report["content"], "two\n")
+        self.assertEqual(report["lines"], [{"number": 2, "text": "two"}])
+        self.assertEqual(self.payload("source", "file.py")["file_lines"], 3)
+        oversized = self.cli("source", "file.py", "--max-bytes", "3", "--json")
+        self.assertIn("exceeds", json.loads(oversized.stderr)["error"])
+        self.assertIn("# codegent source", self.cli("source", "file.py", "--markdown").stdout)

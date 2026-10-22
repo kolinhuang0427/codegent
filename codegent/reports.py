@@ -176,3 +176,10 @@ def render_files(report: dict[str, Any]) -> str:
     lines.extend(f"{row['mode']}  {row['type']}  {row['size'] if row['size'] is not None else '-'}  {row['path']}" for row in report["files"])
     lines.append(f"Showing {len(report['files'])} of {report['total_files']} entries")
     return "\n".join(lines) + "\n"
+
+
+@safe_display
+def render_source(report: dict[str, Any]) -> str:
+    lines = [f"Source: {report['path']} at {report['resolved_ref'][:12]}"]
+    lines.extend(f"{row['number']:6}  {row['text']}" for row in report["lines"])
+    return "\n".join(lines) + "\n"

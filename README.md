@@ -237,3 +237,8 @@ the two names as separate companion files. Co-occurrence is not a dependency cla
 `files [PATH] --ref COMMIT --limit 1000` browses a committed tree without
 checking it out. Reports include literal paths, modes, object types/IDs, blob sizes,
 and explicit entry-count truncation; submodule sizes are unknown rather than zero.
+
+`source FILE --ref COMMIT --lines 10:40 --max-bytes 1048576` previews committed
+text without changing the checkout. JSON preserves selected content and line
+endings; display formats use numbered, escaped lines. Binary or oversized blobs
+are rejected before preview, and the size limit applies before line selection.

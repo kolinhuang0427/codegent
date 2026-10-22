@@ -299,6 +299,37 @@ class GitTracer:
                 "total_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
                 "truncated": len(files) > limit, "files": files[:limit]}
 
+    def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576) -> dict[str, Any]:
+        positive_count(max_bytes, "max_bytes")
+        path = self.normalize_path(path)
+        resolved = self.resolve_ref(ref)
+        object_name = f"{resolved}:{path}"
+        if self.git(["cat-file", "-t", object_name]).strip() != "blob":
+            raise GitError("source preview requires a file blob")
+        size = int(self.git(["cat-file", "-s", object_name]).strip())
+        if size > max_bytes:
+            raise GitError(f"source blob exceeds --max-bytes={max_bytes}")
+        content = self.git(["cat-file", "blob", object_name])
+        if "\0" in content:
+            raise GitError("source preview is unavailable for binary files")
+        parts = content.split("\n")
+        file_lines = [part + "\n" for part in parts[:-1]]
+        if parts[-1]:
+            file_lines.append(parts[-1])
+        start, end = 1, len(file_lines)
+        if lines:
+            match = re.fullmatch(r"([1-9][0-9]*):([1-9][0-9]*)", lines)
+            if not match:
+                raise GitError("--lines must be START:END with positive line numbers")
+            start, end = map(int, match.groups())
+            if start > end or end > len(file_lines):
+                raise GitError("line range is outside the file")
+        selected = file_lines[start - 1:end]
+        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
+                "size": size, "file_lines": len(file_lines), "line_range": lines,
+                "content": "".join(selected),
+                "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
+
     def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None) -> dict[str, Any]:
         path = self.normalize_path(path)
         commit = self.resolve_ref(ref)
