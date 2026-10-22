@@ -47,6 +47,7 @@ class ReportArgumentParser(argparse.ArgumentParser):
 def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--version", action="version", version=f"codegent {__version__}")
+    common.add_argument("--no-clobber", action="store_true", default=argparse.SUPPRESS, help="Create an export only if its destination does not exist")
     common.add_argument("--output", default=argparse.SUPPRESS, help="Atomically write a report to a file; - means stdout")
     common.add_argument("--mailmap", action="store_true", default=argparse.SUPPRESS, help="Canonicalize history authors with .mailmap")
     common.add_argument("--ignore-whitespace", action="store_true", default=argparse.SUPPRESS, help="Ignore whitespace in textual change statistics")
@@ -168,6 +169,8 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("choose one of --json and --markdown")
     if args.compact and not args.json_output:
         parser.error("--compact requires --json")
+    if args.no_clobber and args.output in (None, "-"):
+        parser.error("--no-clobber requires a file --output destination")
     invalid = {
         "diff": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
@@ -194,7 +197,7 @@ def main(argv: list[str] | None = None) -> int:
             output = render_markdown(result, args.command)
         else:
             output = ascii_graphics(result) if args.ascii else result
-        _write_output(output, args.output)
+        _write_output(output, args.output, no_clobber=args.no_clobber)
     except BrokenPipeError:
         # Redirect the descriptor so shutdown cannot flush the closed pipe again.
         with open(os.devnull, "w") as sink:
@@ -212,7 +215,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _write_output(text: str, destination: str | None) -> None:
+def _write_output(text: str, destination: str | None, *, no_clobber: bool = False) -> None:
     if not text.endswith("\n"):
         text += "\n"
     if destination in (None, "-"):
@@ -228,7 +231,10 @@ def _write_output(text: str, destination: str | None) -> None:
             stream.write(text)
             stream.flush()
             os.fsync(stream.fileno())
-        os.replace(temporary, target)
+        if no_clobber:
+            os.link(temporary, target)  # Atomic exclusive creation on the same filesystem.
+        else:
+            os.replace(temporary, target)
     except OSError as exc:
         raise GitError(f"cannot write report to {str(target)!r}: {exc.strerror or exc}") from exc
     finally:
@@ -238,7 +244,7 @@ def _write_output(text: str, destination: str | None) -> None:
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False, "compact": False,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False, "compact": False, "no_clobber": False,
         "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():

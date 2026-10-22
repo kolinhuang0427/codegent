@@ -265,3 +265,7 @@ for non-ASCII repository content.
 
 `--json --compact` emits each complete report on one line, with the same
 structured data as indented JSON. It works with stdout and atomic file exports.
+
+`--output report.json --json --no-clobber` atomically creates a new export
+without replacing an existing destination, including during concurrent writes.
+A file destination is required; temporary export files are cleaned up on failure.

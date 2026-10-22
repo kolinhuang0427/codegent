@@ -312,3 +312,15 @@ class RoundTwoTests(RepositoryCase):
         invalid = self.cli("trace", "file.py", "--compact")
         self.assertEqual(invalid.returncode, 2)
         self.assertIn("requires --json", invalid.stderr)
+
+    def test_no_clobber_exports_are_exclusive_and_preserve_existing_reports(self):
+        self.write("file.py")
+        self.commit()
+        target = self.repo / "report.json"
+        first = self.cli("trace", "file.py", "--json", "--output", str(target), "--no-clobber")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        saved = target.read_text()
+        second = self.cli("trace", "file.py", "--json", "--output", str(target), "--no-clobber")
+        self.assertEqual(second.returncode, 1)
+        self.assertEqual(target.read_text(), saved)
+        self.assertEqual(list(self.repo.glob(".codegent-*")), [])
