@@ -258,3 +258,7 @@ Git stat is omitted so it cannot contradict the selected rows.
 `--newest-first` reverses the presentation of file-history entries in text, JSON,
 and Markdown. Origin/latest semantics and chronological line calculations remain
 unchanged; JSON records the selected `order`.
+
+`--ascii` replaces terminal drawing glyphs with plain ASCII and disables color.
+Unicode filenames and messages remain intact; use a UTF-8 terminal or file export
+for non-ASCII repository content.

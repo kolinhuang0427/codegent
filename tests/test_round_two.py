@@ -289,3 +289,14 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(result["latest"]["message"], "newest")
         self.assertEqual(result["order"], "newest-first")
         self.assertEqual(result["genes"][0]["commit_hash"], result["latest"]["hash"])
+
+    def test_ascii_graphics_preserve_unicode_content_and_disable_color(self):
+        self.write("file.py")
+        self.commit("Unicode 中文")
+        report = self.cli("trace", "file.py", "--ascii", env={"CLICOLOR_FORCE": "1"})
+        self.assertEqual(report.returncode, 0, report.stderr)
+        self.assertNotIn("╭", report.stdout)
+        self.assertNotIn("│", report.stdout)
+        self.assertNotIn("\x1b", report.stdout)
+        self.assertIn("+---", report.stdout)
+        self.assertIn("Unicode 中文", report.stdout)

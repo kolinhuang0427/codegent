@@ -13,7 +13,7 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .exports import render_markdown
-from .display import escape_text
+from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
 from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source
@@ -64,6 +64,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     formats = common.add_mutually_exclusive_group()
     formats.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
     formats.add_argument("--markdown", action="store_true", default=argparse.SUPPRESS, help="Export a Markdown report")
+    common.add_argument("--ascii", action="store_true", default=argparse.SUPPRESS, help="Use plain ASCII drawing characters in terminal reports")
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
     common.add_argument(
         "--max-commits",
@@ -179,7 +180,7 @@ def main(argv: list[str] | None = None) -> int:
     if unsupported:
         flags = ["--no-follow" if key == "follow" else "--" + key.replace("_", "-") for key in unsupported]
         parser.error(f"{args.command} does not support {', '.join(flags)}")
-    color = supports_color(args.no_color) and not (args.json_output or args.markdown) and args.output in (None, "-")
+    color = supports_color(args.no_color or args.ascii) and not (args.json_output or args.markdown) and args.output in (None, "-")
     handler: Callable[[argparse.Namespace, bool], Any] = args.handler
     try:
         result = handler(args, color)
@@ -188,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.markdown:
             output = render_markdown(result, args.command)
         else:
-            output = result
+            output = ascii_graphics(result) if args.ascii else result
         _write_output(output, args.output)
     except BrokenPipeError:
         # Redirect the descriptor so shutdown cannot flush the closed pipe again.
@@ -233,7 +234,7 @@ def _write_output(text: str, destination: str | None) -> None:
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False,
         "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
