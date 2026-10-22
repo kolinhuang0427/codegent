@@ -13,7 +13,7 @@ import sys
 from typing import Any, Callable
 
 from .colors import danger, supports_color
-from .exports import render_markdown
+from .exports import render_markdown, render_csv
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
@@ -82,6 +82,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common.add_argument("--repo", default=argparse.SUPPRESS, help="Git repository path")
     formats = common.add_mutually_exclusive_group()
     formats.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
+    formats.add_argument("--csv", action="store_true", dest="csv_output", default=argparse.SUPPRESS, help="Export tabular rows with JSON report metadata")
     formats.add_argument("--markdown", action="store_true", default=argparse.SUPPRESS, help="Export a Markdown report")
     common.add_argument("--compact", action="store_true", default=argparse.SUPPRESS, help="Emit single-line JSON reports (requires --json)")
     common.add_argument("--ascii", action="store_true", default=argparse.SUPPRESS, help="Use plain ASCII drawing characters in terminal reports")
@@ -156,7 +157,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     owners.add_argument("--group-by", choices=("author", "commit"), default="author")
     owners.set_defaults(handler=_cmd_owners)
 
-    timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author-date periods")
+    timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author or committer date periods")
     timeline.add_argument("path", nargs="?", default=".")
     timeline.add_argument("--date-basis", choices=("author", "committer"), default="author")
     timeline.add_argument("--period", choices=("day", "month", "year"), default="month")
@@ -215,8 +216,8 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(tokens)
     provided = set(vars(args))
     _apply_defaults(args)
-    if args.json_output and args.markdown:
-        parser.error("choose one of --json and --markdown")
+    if sum((args.json_output, args.markdown, args.csv_output)) > 1:
+        parser.error("choose one of --json, --markdown, and --csv")
     if args.compact and not args.json_output:
         parser.error("--compact requires --json")
     if args.no_clobber and args.output in (None, "-"):
@@ -240,7 +241,7 @@ def main(argv: list[str] | None = None) -> int:
     if unsupported:
         flags = ["--no-follow" if key == "follow" else "--" + key.replace("_", "-") for key in unsupported]
         parser.error(f"{args.command} does not support {', '.join(flags)}")
-    color = supports_color(args.no_color or args.ascii) and not (args.json_output or args.markdown) and args.output in (None, "-")
+    color = supports_color(args.no_color or args.ascii) and not (args.json_output or args.markdown or args.csv_output) and args.output in (None, "-")
     handler: Callable[[argparse.Namespace, bool], Any] = args.handler
     try:
         result = handler(args, color)
@@ -249,6 +250,8 @@ def main(argv: list[str] | None = None) -> int:
                                 separators=(",", ":") if args.compact else None, sort_keys=True)
         elif args.markdown:
             output = render_markdown(result, args.command)
+        elif args.csv_output:
+            output = render_csv(result, args.command)
         else:
             output = ascii_graphics(result) if args.ascii else result
         _write_output(output, args.output, no_clobber=args.no_clobber)
@@ -305,7 +308,7 @@ def _write_output(text: str, destination: str | None, *, no_clobber: bool = Fals
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False, "compact": False, "no_clobber": False,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "csv_output": False, "no_color": False, "ascii": False, "compact": False, "no_clobber": False,
         "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
@@ -332,28 +335,28 @@ def _history(args: argparse.Namespace):
 
 def _cmd_trace(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output or args.markdown:
+    if args.json_output or args.markdown or args.csv_output:
         return bloodline.to_dict()
     return render_trace(bloodline, color=color)
 
 
 def _cmd_ancestry(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output or args.markdown:
+    if args.json_output or args.markdown or args.csv_output:
         return bloodline.to_dict()
     return render_ancestry(bloodline, color=color)
 
 
 def _cmd_genemap(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output or args.markdown:
+    if args.json_output or args.markdown or args.csv_output:
         return bloodline.to_dict()
     return render_genemap(bloodline, color=color)
 
 
 def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output or args.markdown:
+    if args.json_output or args.markdown or args.csv_output:
         return bloodline.to_dict()
     return "\n" + render_bloodline_summary(bloodline, color=color) + "\n"
 
@@ -364,20 +367,20 @@ def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
         report = diff.to_dict()
         report.pop("files")
         report.pop("stat")
-        if args.json_output or args.markdown:
+        if args.json_output or args.markdown or args.csv_output:
             return report
         summary = diff.summary
         return (f"{summary['files']} files: +{summary['additions']} -{summary['deletions']} lines; "
                 f"{summary['binary_files']} binary files\n" +
                 ", ".join(f"{key}={value}" for key, value in sorted(summary["statuses"].items())))
-    if args.json_output or args.markdown:
+    if args.json_output or args.markdown or args.csv_output:
         return diff.to_dict()
     return render_diff_lineage(diff, color=color)
 
 
 def _cmd_authors(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = author_report(_history(args), sort=args.sort, limit=args.limit, group_by=args.group_by, min_commits=args.min_commits)
-    return report if args.json_output or args.markdown else render_authors(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_authors(report)
 
 
 def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
@@ -387,18 +390,18 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     if args.current_only:
         current_paths = set(tracer.git(["ls-tree", "-r", "--name-only", "-z", history.resolved_ref]).split("\0")) - {""}
     report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits, excludes=args.exclude, current_paths=current_paths)
-    return report if args.json_output or args.markdown else render_hotspots(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_hotspots(report)
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, detect_copies=args.detect_copies, group_by=args.group_by, max_bytes=args.max_bytes)
-    return report if args.json_output or args.markdown else render_owners(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_owners(report)
 
 
 def _cmd_timeline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
     report = timeline_report(history, period=args.period, date_basis=args.date_basis, fill_gaps=args.fill_gaps, max_periods=args.max_periods)
-    return report if args.json_output or args.markdown else render_timeline(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_timeline(report)
 
 
 def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
@@ -406,38 +409,38 @@ def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     path = tracer.normalize_path(args.path)
     history = tracer.repository_history(tracer.root(), args.ref, **_history_options(args))
     report = cochange_report(history, path, limit=args.limit, min_shared=args.min_shared)
-    return report if args.json_output or args.markdown else render_cochange(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_cochange(report)
 
 
 def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).tracked_files(args.path, args.ref, limit=args.limit, sort=args.sort, kind=args.kind)
-    return report if args.json_output or args.markdown else render_files(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_files(report)
 
 
 def _cmd_source(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes)
-    return report if args.json_output or args.markdown else render_source(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_source(report)
 
 
 def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).doctor()
-    return report if args.json_output or args.markdown else render_doctor(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_doctor(report)
 
 
 def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).refs(kind=args.kind, limit=args.limit)
-    return report if args.json_output or args.markdown else render_refs(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_refs(report)
 
 
 def _cmd_commits(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.target, exclude_ref=args.base, **_history_options(args))
     report = commit_range_report(history)
-    return report if args.json_output or args.markdown else render_commits(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_commits(report)
 
 
 def _cmd_patch(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).patch(args.base, args.target, paths=args.paths, context=args.context, max_bytes=args.max_bytes)
-    return report if args.json_output or args.markdown else render_patch(report)
+    return report if args.json_output or args.markdown or args.csv_output else render_patch(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

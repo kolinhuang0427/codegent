@@ -85,3 +85,58 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
             [row[key] for key in ("short_hash", "author_name", "date", "role", "additions", "deletions", "message")]
             for row in report["commits"]])
     return "\n".join(lines).rstrip() + "\n"
+
+
+# Schemas retain meaningful headers even when a report has no data rows.
+_CSV_TABLES = {
+    "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
+    "hotspots": ("files", ("path", "commits", "churn", "binary_changes")),
+    "cochange": ("files", ("path", "shared_commits", "fraction")),
+    "files": ("files", ("path", "mode", "type", "size", "object_id")),
+    "refs": ("refs", ("ref", "kind", "object_type", "object_id", "peeled_object_id", "peeled_object_type")),
+    "owners": ("owners", ("author", "lines", "percentage", "boundary_lines", "commits", "commit")),
+    "timeline": ("periods", ("period", "commits", "authors", "files", "additions", "deletions", "binary_changes")),
+    "source": ("lines", ("number", "text")),
+    "diff": ("files", ("path", "status", "additions", "deletions", "binary")),
+}
+
+
+def render_csv(report: dict[str, Any], command: str) -> str:
+    """Export rows without losing the report's scope, evidence, or empty state.
+
+    Nested values use JSON cells; null is JSON null, distinguishable from empty
+    text. Metadata repeats on each row, or on a sentinel row for an empty table.
+    """
+    import csv
+    import io
+    import json
+
+    metadata = dict(report)
+    if command == "doctor":
+        rows = [{"check": key, "value": value} for key, value in report.items()]
+        columns = ["check", "value"]
+        metadata = {}
+    elif command == "patch":
+        rows = [{"patch": metadata.pop("patch")}]
+        columns = ["patch"]
+    elif command == "diff" and "files" not in report:
+        rows = [metadata.pop("summary")]
+        columns = ["files", "additions", "deletions", "binary_files", "statuses"]
+    else:
+        key, schema = _CSV_TABLES.get(command, ("commits", ("hash", "author_name", "author_email", "date", "committer_date", "message", "additions", "deletions", "role")))
+        rows = metadata.pop(key)
+        columns = list(schema)
+    columns.extend(sorted({key for row in rows for key in row} - set(columns)))
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, lineterminator="\r\n")
+    writer.writerow(["row_present", *columns, "report_metadata"])
+    encoded_metadata = json.dumps(metadata, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+
+    def cell(value: Any) -> Any:
+        return value if isinstance(value, (str, int, float)) and not isinstance(value, bool) else json.dumps(value, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
+
+    for row in rows:
+        writer.writerow(["true", *(cell(row.get(key)) for key in columns), encoded_metadata])
+    if not rows:
+        writer.writerow(["false", *("" for _ in columns), encoded_metadata])
+    return output.getvalue()

@@ -1,6 +1,8 @@
 """Exercise an installed console script outside the source tree."""
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 from pathlib import Path
@@ -73,6 +75,15 @@ def main() -> None:
         checked.append("source")
         assert report("doctor")["working_tree_clean"]
         checked.append("doctor")
+        assert report("refs")["total_refs"] == 1
+        checked.append("refs")
+        assert report("commits", base, "HEAD")["total_commits"] == 1
+        checked.append("commits")
+        assert "+four" in report("patch", base, "HEAD")["patch"]
+        checked.append("patch")
+        assert report("files", "--sort", "size", "--kind", "file")["matching_files"] == 2
+        assert report("timeline", "--fill-gaps", "--date-basis", "committer")["fill_gaps"]
+        assert report("owners", name, "--group-by", "commit")["group_by"] == "commit"
         assert report("owners", name, "--detect-moves")["selected_lines"] == 4
         compact = invoke("trace", name, "--json", "--compact")
         assert compact.count("\n") == 1 and json.loads(compact)["total_commits"] == 2
@@ -88,11 +99,14 @@ def main() -> None:
             raise AssertionError("no-clobber replaced an existing export")
         assert target.read_text() == saved
         for command in checked:
-            arguments = [command, base, "HEAD"] if command == "diff" else [command] if command in {"hotspots", "timeline", "files", "doctor"} else [command, name]
+            arguments = [command, base, "HEAD"] if command in {"diff", "commits", "patch"} else [command] if command in {"hotspots", "timeline", "files", "doctor", "refs"} else [command, name]
             assert invoke(*arguments, "--markdown").startswith(f"# codegent {command}")
             assert invoke(*arguments, "--no-color").strip()
+            rows = list(csv.DictReader(io.StringIO(invoke(*arguments, "--csv"))))
+            assert rows and "report_metadata" in rows[0]
+            json.loads(rows[0]["report_metadata"])
         print(json.dumps({"version": invoke("--version").strip(), "installed_executable": executable,
-                          "commands_verified": checked, "formats": ["text", "json", "markdown"],
+                          "commands_verified": checked, "formats": ["text", "json", "markdown", "csv"],
                           "atomic_file_export": True}, indent=2))
 
 
