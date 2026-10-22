@@ -194,3 +194,6 @@ python -m venv /tmp/codegent-check
 /tmp/codegent-check/bin/python -m pip install --no-deps dist/*.whl
 python scripts/smoke_installed.py /tmp/codegent-check/bin/codegent
 ```
+
+Repository selection ignores inherited `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+`GIT_COMMON_DIR`, and `GIT_PREFIX` overrides so `--repo` remains authoritative.

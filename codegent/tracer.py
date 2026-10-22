@@ -94,6 +94,9 @@ class GitTracer:
             args = [arg.replace("%an", "%aN").replace("%ae", "%aE") if arg.startswith("--format=") else arg for arg in args]
         cmd = ["git", "-c", "color.ui=false", "-c", "log.showSignature=false",
                "-c", "i18n.logOutputEncoding=UTF-8", "--literal-pathspecs", "-C", self.repo, *args]
+        environment = dict(os.environ)
+        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX"):
+            environment.pop(key, None)
         try:
             result = subprocess.run(
                 cmd,
@@ -102,6 +105,7 @@ class GitTracer:
                 stderr=subprocess.PIPE,
                 text=False,
                 timeout=self.timeout,
+                env=environment,
             )
         except subprocess.TimeoutExpired as exc:
             raise GitExecutionError(f"git timed out after {self.timeout:g} seconds") from exc
