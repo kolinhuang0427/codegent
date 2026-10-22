@@ -284,3 +284,7 @@ file and whitespace mode are recorded in JSON. Reattribution follows Git heurist
 `owners --detect-moves` enables Git blame within-file block-move detection
 (`-M`). JSON records the mode; this remains heuristic attribution, not proof of
 semantic authorship. It combines with whitespace and ignored-revision options.
+
+`owners --max-bytes N` checks blob size before reading attribution content or
+selecting lines. Ownership and source previews share a 1 MiB default text-blob
+bound; directory objects and binary blobs are rejected explicitly.

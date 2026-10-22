@@ -330,19 +330,24 @@ class GitTracer:
                 "total_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
                 "truncated": len(files) > limit, "files": files[:limit]}
 
+    def _text_blob(self, resolved: str, path: str, *, max_bytes: int, purpose: str) -> tuple[str, int]:
+        positive_count(max_bytes, "max_bytes")
+        object_name = f"{resolved}:{path}"
+        if self.git(["cat-file", "-t", object_name]).strip() != "blob":
+            raise GitError(f"{purpose} requires a file blob")
+        size = int(self.git(["cat-file", "-s", object_name]).strip())
+        if size > max_bytes:
+            raise GitError(f"{purpose} blob exceeds --max-bytes={max_bytes}")
+        content = self.git(["cat-file", "blob", object_name])
+        if "\0" in content:
+            raise GitError(f"{purpose} is unavailable for binary files")
+        return content, size
+
     def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576) -> dict[str, Any]:
         positive_count(max_bytes, "max_bytes")
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
-        object_name = f"{resolved}:{path}"
-        if self.git(["cat-file", "-t", object_name]).strip() != "blob":
-            raise GitError("source preview requires a file blob")
-        size = int(self.git(["cat-file", "-s", object_name]).strip())
-        if size > max_bytes:
-            raise GitError(f"source blob exceeds --max-bytes={max_bytes}")
-        content = self.git(["cat-file", "blob", object_name])
-        if "\0" in content:
-            raise GitError("source preview is unavailable for binary files")
+        content, size = self._text_blob(resolved, path, max_bytes=max_bytes, purpose="source preview")
         parts = content.split("\n")
         file_lines = [part + "\n" for part in parts[:-1]]
         if parts[-1]:
@@ -361,12 +366,10 @@ class GitTracer:
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 
-    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False) -> dict[str, Any]:
+    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False, max_bytes: int = 1048576) -> dict[str, Any]:
         path = self.normalize_path(path)
         commit = self.resolve_ref(ref)
-        source = self.git(["cat-file", "blob", f"{commit}:{path}"])
-        if "\0" in source:
-            raise GitError("line ownership is unavailable for binary files")
+        source, size = self._text_blob(commit, path, max_bytes=max_bytes, purpose="line ownership")
         file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
         args = ["blame", "--line-porcelain"]
         if detect_moves:
@@ -414,7 +417,7 @@ class GitTracer:
         warnings = ["Shallow repository: blame may attribute older lines to a boundary commit."] if shallow else []
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
                 "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
-                "file_lines": file_lines, "selected_lines": total, "line_range": lines,
+                "file_lines": file_lines, "selected_lines": total, "line_range": lines, "size": size, "max_bytes": max_bytes,
                 "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 

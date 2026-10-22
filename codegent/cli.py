@@ -131,6 +131,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     owners = subparsers.add_parser("owners", parents=[common], help="Report surviving-line attribution at a commit")
     owners.add_argument("path")
+    owners.add_argument("--max-bytes", type=positive_int, default=1048576, help="Maximum blob size before attribution (default: 1 MiB)")
     owners.add_argument("--detect-moves", action="store_true", help="Retain attribution across within-file moved blocks")
     owners.add_argument("--ignore-revs-file", help="Ignore listed mechanical commits when attributing lines")
     owners.add_argument("--lines", help="Inclusive START:END line range")
@@ -344,7 +345,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves)
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, max_bytes=args.max_bytes)
     return report if args.json_output or args.markdown else render_owners(report)
 
 

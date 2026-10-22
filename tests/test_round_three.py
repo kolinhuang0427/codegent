@@ -39,3 +39,13 @@ class RoundThreeTests(RepositoryCase):
         self.assertEqual(tracer.list_reachable_commits(path="[file].py"), [first])
         self.assertEqual(tracer.list_reachable_commits(path=str(self.repo / "src/[file].py")), [first])
         self.assertEqual(tracer.list_reachable_commits(), [first, second])
+
+    def test_ownership_checks_blob_size_before_selecting_lines(self):
+        self.write("file.py", "a reasonably long first line\nsecond\n")
+        self.commit()
+        rejected = self.cli("owners", "file.py", "--lines", "1:1", "--max-bytes", "8", "--json")
+        self.assertEqual(rejected.returncode, 1)
+        self.assertIn("exceeds --max-bytes=8", json.loads(rejected.stderr)["error"])
+        accepted = self.payload("owners", "file.py", "--max-bytes", "1024")
+        self.assertEqual(accepted["selected_lines"], 2)
+        self.assertEqual(accepted["size"], 36)
