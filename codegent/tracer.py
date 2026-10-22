@@ -156,7 +156,7 @@ class GitTracer:
             raise GitRepositoryError(f"not a git repository: {self.repo}") from exc
         if inside != "true":
             raise GitRepositoryError(f"not a git repository: {self.repo}")
-        self.repo = self.git(["rev-parse", "--show-toplevel"]).rstrip("\n")
+        self.repo = self.git(["rev-parse", "--show-toplevel"]).removesuffix("\n")
 
     def has_commits(self) -> bool:
         self.ensure_repository()
