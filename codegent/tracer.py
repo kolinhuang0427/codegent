@@ -241,7 +241,7 @@ class GitTracer:
         args = [
             "log",
             "--date=iso-strict",
-            "--format=%x00%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
+            "--format=%x00%H%x00%P%x00%an%x00%ae%x00%aI%x00%cI%x00%s",
             "-z",
             "--no-ext-diff",
             "--no-textconv",
@@ -566,11 +566,11 @@ class GitTracer:
             if tokens[index] in ("", "\n"):
                 index += 1
                 continue
-            commit_hash, parents, author_name, author_email, date, message = tokens[index:index + 6]
-            index += 6
+            commit_hash, parents, author_name, author_email, date, committer_date, message = tokens[index:index + 7]
+            index += 7
             node = CommitNode(
                 hash=commit_hash, parents=parents.split(), author_name=author_name,
-                author_email=author_email, date=date, message=message,
+                author_email=author_email, date=date, committer_date=committer_date, message=message,
             )
             while index < len(tokens) and tokens[index] not in ("", "\n"):
                 item, index = self._numstat_entry(tokens, index)

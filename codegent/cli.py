@@ -156,6 +156,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author-date periods")
     timeline.add_argument("path", nargs="?", default=".")
+    timeline.add_argument("--date-basis", choices=("author", "committer"), default="author")
     timeline.add_argument("--period", choices=("day", "month", "year"), default="month")
     timeline.set_defaults(handler=_cmd_timeline)
 
@@ -390,7 +391,7 @@ def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 def _cmd_timeline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
-    report = timeline_report(history, period=args.period)
+    report = timeline_report(history, period=args.period, date_basis=args.date_basis)
     return report if args.json_output or args.markdown else render_timeline(report)
 
 

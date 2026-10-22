@@ -152,3 +152,15 @@ class RoundThreeTests(RepositoryCase):
         markdown = self.cli("patch", base, "HEAD", "--markdown")
         self.assertIn("````diff", markdown.stdout)
         self.assertIn("# codegent patch", markdown.stdout)
+
+    def test_timeline_can_distinguish_author_and_committer_dates(self):
+        self.write("file.py")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-01-01T12:00:00Z", "GIT_COMMITTER_DATE": "2026-03-01T12:00:00Z"})
+        self.write("file.py", "changed\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-02-01T12:00:00Z", "GIT_COMMITTER_DATE": "2026-03-02T12:00:00Z"})
+        authored = self.payload("timeline")
+        committed = self.payload("timeline", "--date-basis", "committer")
+        self.assertEqual([row["period"] for row in authored["periods"]], ["2026-01", "2026-02"])
+        self.assertEqual([row["period"] for row in committed["periods"]], ["2026-03"])
+        self.assertEqual(committed["periods"][0]["commits"], 2)
+        self.assertIn("committer_date", self.payload("trace", "file.py")["commits"][0])

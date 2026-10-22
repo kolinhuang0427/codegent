@@ -309,3 +309,7 @@ unified comparison without applying it. The report-size budget is checked after
 Git generates the diff; narrow large comparisons. JSON preserves the original
 patch, while terminal and Markdown previews escape control characters. Markdown
 fences adapt to backticks in patch content. Binary changes use Git summaries.
+
+`timeline --date-basis author|committer` selects the UTC date used for buckets.
+History JSON preserves both dates; Git since/until filters retain committer-date
+semantics regardless of the display basis.

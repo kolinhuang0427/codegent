@@ -105,13 +105,18 @@ def render_owners(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def timeline_report(history: Bloodline, *, period: str = "month") -> dict[str, Any]:
+def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author") -> dict[str, Any]:
     widths = {"day": 10, "month": 7, "year": 4}
     if period not in widths:
         raise GitError("timeline period must be day, month, or year")
+    if date_basis not in {"author", "committer"}:
+        raise GitError("timeline date basis must be author or committer")
     buckets: dict[str, dict[str, Any]] = {}
     for commit in history.commits:
-        key = iso_date(commit.date)[:widths[period]]
+        date = commit.date if date_basis == "author" else commit.committer_date
+        if not date:
+            raise GitError("requested timeline dates are unavailable in supplied history")
+        key = iso_date(date)[:widths[period]]
         row = buckets.setdefault(key, {"period": key, "commits": 0, "authors": set(), "files": set(),
                                        "additions": 0, "deletions": 0, "binary_changes": 0})
         row["commits"] += 1
@@ -127,7 +132,7 @@ def timeline_report(history: Bloodline, *, period: str = "month") -> dict[str, A
     return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
             "selection": history.selection, "warnings": history.warnings, "period": period,
-            "date_basis": "author dates normalized to UTC", "periods": rows}
+            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "periods": rows}
 
 
 @safe_display
