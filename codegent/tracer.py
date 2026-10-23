@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import re
 import subprocess
 from dataclasses import dataclass
 from typing import Any
@@ -17,6 +16,10 @@ class GitError(RuntimeError):
 
 class GitRepositoryError(GitError):
     """Raised when a path is not a usable git repository."""
+
+
+class GitExecutionError(GitError):
+    """Raised when Git cannot be started."""
 
 
 class PathNotFoundError(GitError):
@@ -45,53 +48,72 @@ class GitTracer:
     """Trace file history through git using subprocess calls."""
 
     def __init__(self, repo: str = ".") -> None:
-        self.repo = os.path.abspath(repo)
+        self.repo = os.path.realpath(os.path.expanduser(repo))
+        self.path_base = self.repo
 
     def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
-        cmd = ["git", "-C", self.repo, *args]
-        result = subprocess.run(
-            cmd,
-            check=False,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=text,
-        )
+        cmd = ["git", "--literal-pathspecs", "-C", self.repo, *args]
+        try:
+            result = subprocess.run(
+                cmd,
+                check=False,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=False,
+            )
+        except OSError as exc:
+            raise GitExecutionError(f"cannot run git: {exc.strerror or exc}") from exc
         if check and result.returncode != 0:
-            stderr = result.stderr.strip() if isinstance(result.stderr, str) else ""
+            stderr = result.stderr.decode("utf-8", "replace").strip()
             raise GitError(stderr or f"git command failed: {' '.join(cmd)}")
-        return result.stdout if isinstance(result.stdout, str) else result.stdout.decode()
+        return result.stdout.decode("utf-8", "surrogateescape")
 
     def ensure_repository(self) -> None:
         if not os.path.isdir(self.repo):
             raise GitRepositoryError(f"repository path does not exist: {self.repo}")
         try:
             inside = self.git(["rev-parse", "--is-inside-work-tree"]).strip()
+        except GitExecutionError:
+            raise
         except GitError as exc:
             raise GitRepositoryError(f"not a git repository: {self.repo}") from exc
         if inside != "true":
             raise GitRepositoryError(f"not a git repository: {self.repo}")
+        self.repo = self.git(["rev-parse", "--show-toplevel"]).rstrip("\n")
 
     def has_commits(self) -> bool:
         self.ensure_repository()
-        result = subprocess.run(
-            ["git", "-C", self.repo, "rev-parse", "--verify", "HEAD"],
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            check=False,
-        )
-        return result.returncode == 0
+        return bool(self.git(["rev-parse", "--verify", "HEAD"], check=False).strip())
 
     def root(self) -> str:
         self.ensure_repository()
-        return self.git(["rev-parse", "--show-toplevel"]).strip()
+        return self.repo
+
+    def normalize_path(self, path: str) -> str:
+        self.ensure_repository()
+        absolute = os.path.abspath(os.path.join(self.path_base, path))
+        absolute = os.path.join(os.path.realpath(os.path.dirname(absolute)), os.path.basename(absolute))
+        if os.path.commonpath([self.repo, absolute]) != self.repo:
+            raise GitError(f"path is outside the repository: {path!r}")
+        return os.path.relpath(absolute, self.repo).replace(os.sep, "/")
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
-        args = ["rev-list", "--reverse", ref]
+        args = ["rev-list", "--reverse", self.resolve_ref(ref)]
         if path:
             args.extend(["--", path])
         output = self.git(args)
         return [line for line in output.splitlines() if line]
+
+    def resolve_ref(self, ref: str) -> str:
+        """Accept a single commit-ish, never a revision range or Git option."""
+        try:
+            return self.git([
+                "rev-parse", "--verify", "--end-of-options", f"{ref}^{{commit}}",
+            ]).strip()
+        except GitExecutionError:
+            raise
+        except GitError as exc:
+            raise GitError(f"invalid commit/ref: {ref!r}") from exc
 
     def trace_path(
         self,
@@ -100,21 +122,28 @@ class GitTracer:
         *,
         max_commits: int | None = 10000,
     ) -> Bloodline:
+        if max_commits is not None and max_commits <= 0:
+            raise GitError("max_commits must be greater than zero or None")
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
+
+        path = self.normalize_path(path)
 
         args = [
             "log",
             "--follow",
             "--date=iso-strict",
-            "--format=%x1e%H%x1f%P%x1f%an%x1f%ae%x1f%ad%x1f%s",
+            "--format=%x00%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
+            "-z",
+            "--no-ext-diff",
+            "--no-textconv",
             "--numstat",
-            "--summary",
+            "--find-renames",
         ]
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits}")
-        args.extend([ref, "--", path])
+        args.extend([self.resolve_ref(ref), "--", path])
 
         output = self.git(args)
         newest_first = self._parse_log(output)
@@ -139,9 +168,10 @@ class GitTracer:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
-        stat = self.git(["diff", "--stat", "--find-renames", commit_a, commit_b])
-        numstat = self.git(["diff", "--numstat", "--find-renames", commit_a, commit_b])
-        name_status = self.git(["diff", "--name-status", "--find-renames", commit_a, commit_b])
+        base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
+        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", "--find-renames", base, target, "--"])
+        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", "--find-renames", base, target, "--"])
+        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", "--find-renames", base, target, "--"])
         files = self._merge_diff_outputs(numstat, name_status)
         return DiffLineage(
             repo=self.root(),
@@ -151,85 +181,47 @@ class GitTracer:
             stat=stat.rstrip(),
         )
 
+    def _numstat_entry(self, tokens: list[str], index: int) -> tuple[dict[str, Any], int]:
+        record = tokens[index].removeprefix("\n")
+        added, deleted, path = record.split("\t", 2)
+        binary = added == "-" or deleted == "-"
+        item: dict[str, Any] = {
+            "path": path, "additions": 0 if binary else int(added),
+            "deletions": 0 if binary else int(deleted), "binary": binary,
+        }
+        index += 1
+        if not path:
+            old, new = tokens[index:index + 2]
+            item.update(path=new, renamed_from=old, renamed_to=new)
+            index += 2
+        return item, index
+
     def _parse_log(self, output: str) -> list[CommitNode]:
+        # NUL delimiters preserve whitespace, Unicode and control characters in paths.
+        tokens = output.split("\0")
         commits: list[CommitNode] = []
-        for raw_block in output.split("\x1e"):
-            block = raw_block.strip("\n")
-            if not block.strip():
+        index = 0
+        while index < len(tokens):
+            if tokens[index] in ("", "\n"):
+                index += 1
                 continue
-            lines = block.splitlines()
-            header = lines[0]
-            parts = header.split("\x1f")
-            if len(parts) < 6:
-                continue
-            commit_hash, parents, author_name, author_email, date, message = parts[:6]
+            commit_hash, parents, author_name, author_email, date, message = tokens[index:index + 6]
+            index += 6
             node = CommitNode(
-                hash=commit_hash,
-                parents=[parent for parent in parents.split() if parent],
-                author_name=author_name,
-                author_email=author_email,
-                date=date,
-                message=message,
+                hash=commit_hash, parents=parents.split(), author_name=author_name,
+                author_email=author_email, date=date, message=message,
             )
-            rename_from: str | None = None
-            for line in lines[1:]:
-                stripped = line.strip()
-                if not stripped:
-                    continue
-                if self._looks_like_numstat(line):
-                    added, deleted, file_path, binary = self._parse_numstat(line)
-                    node.additions += added
-                    node.deletions += deleted
-                    node.binary = node.binary or binary
-                    if file_path and file_path not in node.files:
-                        node.files.append(file_path)
-                    continue
-                if stripped.startswith("rename from "):
-                    rename_from = stripped.removeprefix("rename from ").strip()
-                    node.renamed_from = rename_from
-                    continue
-                if stripped.startswith("rename to "):
-                    node.renamed_to = stripped.removeprefix("rename to ").strip()
-                    if rename_from:
-                        node.renamed_from = rename_from
-                    continue
-                match = re.match(r"rename\s+(.+?)\s+=>\s+(.+?)\s+\(\d+%\)", stripped)
-                if match:
-                    node.renamed_from = self._clean_rename_path(match.group(1))
-                    node.renamed_to = self._clean_rename_path(match.group(2))
+            while index < len(tokens) and tokens[index] not in ("", "\n"):
+                item, index = self._numstat_entry(tokens, index)
+                node.additions += item["additions"]
+                node.deletions += item["deletions"]
+                node.binary = node.binary or item["binary"]
+                node.files.append(item["path"])
+                if "renamed_from" in item:
+                    node.renamed_from = item["renamed_from"]
+                    node.renamed_to = item["renamed_to"]
             commits.append(node)
         return commits
-
-    def _looks_like_numstat(self, line: str) -> bool:
-        parts = line.split("\t")
-        if len(parts) < 3:
-            return False
-        return (parts[0].isdigit() or parts[0] == "-") and (
-            parts[1].isdigit() or parts[1] == "-"
-        )
-
-    def _parse_numstat(self, line: str) -> tuple[int, int, str, bool]:
-        parts = line.split("\t")
-        added_raw, deleted_raw = parts[0], parts[1]
-        file_path = "\t".join(parts[2:])
-        binary = added_raw == "-" or deleted_raw == "-"
-        added = 0 if binary else int(added_raw)
-        deleted = 0 if binary else int(deleted_raw)
-        return added, deleted, self._clean_rename_path(file_path), binary
-
-    def _clean_rename_path(self, path: str) -> str:
-        cleaned = path.strip()
-        if " => " not in cleaned:
-            return cleaned
-        prefix = ""
-        suffix = ""
-        body = cleaned
-        if "{" in cleaned and "}" in cleaned:
-            prefix = cleaned.split("{", 1)[0]
-            body = cleaned.split("{", 1)[1].rsplit("}", 1)[0]
-            suffix = cleaned.rsplit("}", 1)[1]
-        left, right = [part.strip() for part in body.split(" => ", 1)]
-        return f"{prefix}{right}{suffix}"
 
     def _assign_roles(self, commits: list[CommitNode]) -> None:
         if not commits:
@@ -251,39 +243,29 @@ class GitTracer:
 
     def _merge_diff_outputs(self, numstat: str, name_status: str) -> list[dict[str, Any]]:
         stats_by_path: dict[str, dict[str, Any]] = {}
-        for line in numstat.splitlines():
-            if not self._looks_like_numstat(line):
-                continue
-            added, deleted, path, binary = self._parse_numstat(line)
-            stats_by_path[path] = {
-                "path": path,
-                "additions": added,
-                "deletions": deleted,
-                "binary": binary,
-                "status": "modified",
-            }
+        tokens = numstat.split("\0")
+        index = 0
+        while index < len(tokens) and tokens[index]:
+            item, index = self._numstat_entry(tokens, index)
+            item["status"] = "modified"
+            stats_by_path[item["path"]] = item
 
-        for line in name_status.splitlines():
-            parts = line.split("\t")
-            if not parts:
-                continue
-            status = parts[0]
-            if status.startswith("R") and len(parts) >= 3:
-                path = parts[2]
-                entry = stats_by_path.setdefault(
-                    path,
-                    {"path": path, "additions": 0, "deletions": 0, "binary": False},
-                )
-                entry["status"] = "renamed"
-                entry["renamed_from"] = parts[1]
-                entry["renamed_to"] = parts[2]
-            elif len(parts) >= 2:
-                path = parts[1]
-                entry = stats_by_path.setdefault(
-                    path,
-                    {"path": path, "additions": 0, "deletions": 0, "binary": False},
-                )
-                entry["status"] = self._status_name(status)
+        tokens = name_status.split("\0")
+        index = 0
+        while index < len(tokens) and tokens[index]:
+            status, path = tokens[index:index + 2]
+            index += 2
+            old_path = None
+            if status.startswith(("R", "C")):
+                old_path, path = path, tokens[index]
+                index += 1
+            entry = stats_by_path.setdefault(path, {
+                "path": path, "additions": 0, "deletions": 0, "binary": False,
+            })
+            entry["status"] = self._status_name(status)
+            if old_path is not None:
+                entry["renamed_from"] = old_path
+                entry["renamed_to"] = path
         return list(stats_by_path.values())
 
     def _status_name(self, status: str) -> str:
@@ -291,6 +273,7 @@ class GitTracer:
             "A": "added",
             "M": "modified",
             "D": "deleted",
+            "R": "renamed",
             "C": "copied",
             "T": "type-changed",
         }.get(status[:1], status.lower())
