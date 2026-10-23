@@ -32,6 +32,16 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", f"Showing {report['displayed_authors']} of {report['total_authors']} author groups; "
                   f"matching: {report['matching_authors']}; omitted: {report['omitted_authors']}.",
                   f"Grouping: {_cell(report['group_by'])}; minimum commits: {report['min_commits']}."]
+    elif command == "bloodline":
+        origin = report.get("origin") or {}
+        lines += _table(["Metric", "Value"], [
+            ["Origin confirmed", report["origin_confirmed"]], ["Earliest observed commit", origin.get("hash", "none")],
+            ["Earliest observed author", f"{origin.get('author_name', '')} <{origin.get('author_email', '')}>"],
+            ["Age in days", report["age_days"] if report["age_days"] is not None else "unknown"],
+            ["Total commits", report["total_commits"]], ["Migration events", len(report["migrations"])],
+            ["Genetic diversity", report["genetic_diversity"]],
+            ["Current net line trace", report["current_carried_lines"] if report["current_carried_lines"] is not None else "unknown"],
+        ])
     elif command == "hotspots":
         lines += _table(["Path", "Commits", "Authors", "Churn", "Last changed", "Binary changes"], [
             [row[key] for key in ("path", "commits", "authors", "churn", "last_changed", "binary_changes")]
@@ -51,6 +61,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
             [row[key] for key in ("path", "commits", "authors", "files", "churn")] for row in report["directories"]])
         lines += ["", f"Showing {len(report['directories'])} of {report['total_directories']} directories.", _cell(report["path_policy"])]
     elif command == "owners":
+        lines += [f"Selected lines: {report['selected_lines']} of {report['file_lines']}; range: {_cell(report['line_range'] or 'whole file')}.", ""]
         keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])
         if report.get("show_lines"):
             keys.append("line_ranges")
@@ -80,11 +91,11 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", f"Target commits: {report['target_commits']}; showing {len(report['files'])} "
                   f"of {report['matching_files']} matching paths.", _cell(report["interpretation"])]
     elif command == "timeline":
-        keys = ["period", "commits", "authors", "files", "additions", "deletions"]
-        headers = ["Period", "Commits", "Authors", "Files", "+", "-"]
+        keys = ["period", "commits", "authors", "files", "additions", "deletions", "binary_changes"]
+        headers = ["Period", "Commits", "Authors", "Files", "+", "-", "Binary changes"]
         if report["cumulative"]:
-            keys += ["cumulative_commits", "cumulative_additions", "cumulative_deletions"]
-            headers += ["Total commits", "Total +", "Total -"]
+            keys += ["cumulative_commits", "cumulative_additions", "cumulative_deletions", "cumulative_binary_changes"]
+            headers += ["Total commits", "Total +", "Total -", "Total binary changes"]
         lines += _table(headers, [[row[key] for key in keys] for row in report["periods"]])
         if report["cumulative"]:
             lines += ["", _cell(report["cumulative_scope"])]
@@ -95,9 +106,11 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
                   f"statuses: {_cell(', '.join(report['statuses']) or 'all')}.", ""]
         lines += _table(["Files", "Additions", "Deletions", "Binary files"], [
             [summary[key] for key in ("files", "additions", "deletions", "binary_files")]])
+        lines += [""] + _table(["Status", "Files"], [[key, count] for key, count in sorted(summary["statuses"].items())])
         if "files" in report:
-            lines += [""] + _table(["Path", "Status", "Additions", "Deletions"], [
-                [row[key] for key in ("path", "status", "additions", "deletions")]
+            lines += [""] + _table(["Path", "Source path", "Status", "Binary", "Additions", "Deletions"], [
+                [row["path"], row.get("renamed_from", row.get("copied_from", "-")), row["status"], row["binary"],
+                 "unavailable" if row["binary"] else row["additions"], "unavailable" if row["binary"] else row["deletions"]]
                 for row in report["files"]])
     else:
         lines += _table(["Commit", "Author", "Date", "Role", "+", "-", "Subject"], [
@@ -112,7 +125,7 @@ _CSV_TABLES = {
     "inventory": ("groups", ("group", "entries", "known_bytes", "unknown_size_entries", "modes")),
     "directories": ("directories", ("path", "commits", "authors", "files", "additions", "deletions", "churn", "binary_changes")),
     "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
-    "hotspots": ("files", ("path", "commits", "churn", "binary_changes")),
+    "hotspots": ("files", ("path", "commits", "authors", "churn", "binary_changes", "first_changed", "last_changed")),
     "cochange": ("files", ("path", "shared_commits", "fraction")),
     "files": ("files", ("path", "mode", "type", "size", "object_id")),
     "refs": ("refs", ("ref", "kind", "object_type", "object_id", "peeled_object_id", "peeled_type")),
@@ -150,6 +163,8 @@ def render_csv(report: dict[str, Any], command: str, *, delimiter: str = ",") ->
         key, schema = _CSV_TABLES.get(command, ("commits", ("hash", "author_name", "author_email", "date", "committer_date", "message", "additions", "deletions", "role")))
         rows = metadata.pop(key)
         columns = list(schema)
+    if command == "timeline" and report.get("cumulative"):
+        columns += ["cumulative_" + key for key in ("commits", "additions", "deletions", "binary_changes")]
     columns.extend(sorted({key for row in rows for key in row} - set(columns)))
     output = io.StringIO(newline="")
     writer = csv.writer(output, delimiter=delimiter, lineterminator="\r\n")

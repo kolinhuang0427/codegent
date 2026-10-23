@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import textwrap
 
-from .display import safe_display, display_width, truncate_cells
+from .display import safe_display, display_width, truncate_cells, graphics
 from .colors import ANSI, heading, muted, paint, role
 from .models import Bloodline, CommitNode
 from .tracer import DiffLineage
@@ -32,8 +32,8 @@ def render_family_tree(bloodline: Bloodline, *, color: bool = True) -> str:
     for index, commit in enumerate(bloodline.display_commits):
         rendered.extend(_commit_box(commit, color=color))
         if index < len(bloodline.commits) - 1:
-            rendered.append("          │")
-            rendered.append("          ▼")
+            rendered.append(graphics("          │"))
+            rendered.append(graphics("          ▼"))
     return "\n".join(f"  {line}" for line in rendered)
 
 
@@ -47,7 +47,7 @@ def render_ancestry(bloodline: Bloodline, *, color: bool = True) -> str:
     lines.extend(f"  Warning: {warning}" for warning in bloodline.warnings)
     genes = bloodline.genes()
     for index, gene in enumerate(genes):
-        prefix = "└─" if index == len(genes) - 1 else "├─"
+        prefix = graphics("└─" if index == len(genes) - 1 else "├─")
         moved = ""
         if gene.migrated_from and gene.migrated_to:
             moved = f"  {muted(gene.migrated_from + ' -> ' + gene.migrated_to, color)}"
@@ -79,7 +79,7 @@ def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
         annotation = _milestone(commit)
         lines.append(
             "  "
-            + f"│ {marker} {paint(commit.short_hash, ANSI.YELLOW, color)} "
+            + f"{graphics('│')} {marker} {paint(commit.short_hash, ANSI.YELLOW, color)} "
             + f"{_truncate(commit.message, 54)}"
         )
         detail = f"{commit.author_name}  +{commit.additions} -{commit.deletions}"
@@ -87,7 +87,7 @@ def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
             detail += "  binary"
         if annotation:
             detail += f"  {annotation}"
-        lines.append("  " + f"│   {muted(detail, color)}")
+        lines.append("  " + f"{graphics('│')}   {muted(detail, color)}")
     lines.append(f"  {muted('oldest' if bloodline.newest_first else 'newest', color)}")
     return "\n".join(lines).rstrip() + "\n"
 
@@ -103,7 +103,7 @@ def render_bloodline_summary(bloodline: Bloodline, *, color: bool = True) -> str
     migration_word = "event" if migrations == 1 else "events"
     lines = [
         f"  {heading('Bloodline Summary', color)}",
-        "  ─────────────────────────",
+        graphics("  ─────────────────────────"),
         f"  {origin_label} author: {origin.author}",
         f"  {origin_label} commit: {paint(origin.short_hash, ANSI.YELLOW, color)}",
         f"  {origin_label} date: {origin.date}",
@@ -127,7 +127,7 @@ def render_diff_lineage(diff: DiffLineage, *, color: bool = True) -> str:
         "",
     ]
     if not diff.files:
-        lines.append("  No file-level changes found.")
+        lines.append(f"  No changes matched the selected statuses ({diff.total_changed_files} before filtering)." if diff.statuses else "  No file-level changes found.")
     for item in diff.files:
         path = item["path"]
         status = item.get("status", "modified")
@@ -139,7 +139,7 @@ def render_diff_lineage(diff: DiffLineage, *, color: bool = True) -> str:
             moved = f" (copy {item.get('copied_from')} -> {item.get('copied_to')})"
         lines.append(
             "  "
-            + f"├─ {role(status, color)} {path}{moved} "
+            + f"{graphics('├─')} {role(status, color)} {path}{moved} "
             + f"+{item.get('additions', 0)} -{item.get('deletions', 0)}{binary}"
         )
     if diff.stat:
@@ -164,7 +164,7 @@ def _commit_box(commit: CommitNode, *, color: bool) -> list[str]:
     if commit.renamed_from or commit.renamed_to:
         detail_lines.append(f"Rename: {commit.renamed_from or '?'} -> {commit.renamed_to or '?'}")
 
-    lines = ["╭" + "─" * width + "╮"]
+    lines = [graphics("╭" + "─" * width + "╮")]
     for index, line in enumerate(detail_lines):
         line = _truncate(line, width - 1)
         content = line
@@ -173,8 +173,8 @@ def _commit_box(commit: CommitNode, *, color: bool) -> list[str]:
         elif line.startswith("Role:"):
             content = role(line, color)
         visible = _visible_len(line)
-        lines.append("│ " + content + " " * max(0, width - visible - 1) + "│")
-    lines.append("╰" + "─" * width + "╯")
+        lines.append(graphics("│ ") + content + " " * max(0, width - visible - 1) + graphics("│"))
+    lines.append(graphics("╰" + "─" * width + "╯"))
     return lines
 
 
@@ -199,13 +199,13 @@ def _format_age_days(days: int | None) -> str:
 
 
 def _role_marker(role_name: str) -> str:
-    return {
+    return graphics({
         "origin": "◆",
         "heir": "◇",
         "co-author": "●",
         "renamed": "↷",
         "descendant": "•",
-    }.get(role_name, "•")
+    }.get(role_name, "•"))
 
 
 def _role_color(role_name: str) -> str:

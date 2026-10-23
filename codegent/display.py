@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import fields, is_dataclass, replace
 from functools import wraps
+from contextvars import ContextVar
 import unicodedata
 import re
 from typing import Any
@@ -73,3 +74,10 @@ def ascii_graphics(text: str) -> str:
     replacements = {**dict.fromkeys("╭╮╰╯├└┬┴┤┼", "+"), "─": "-", "│": "|",
                     "▼": "v", "◆": "*", "◇": "o", "●": "*", "•": ".", "↷": ">"}
     return text.translate(str.maketrans(replacements))
+
+
+ASCII_DRAWING = ContextVar("codegent_ascii_drawing", default=False)
+
+
+def graphics(text: str) -> str:
+    return ascii_graphics(text) if ASCII_DRAWING.get() else text

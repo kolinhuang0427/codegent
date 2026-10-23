@@ -403,3 +403,5 @@ the checkout on Linux/macOS with Python 3.10/3.12. The package remains dependenc
 Review fixes preserve legacy positional model arguments, normalize platform path syntax and external subtree aliases, reject empty/abbreviated scope options, include untracked files in diagnostics, and preserve existing export permissions when descriptor-based chmod is unavailable.
 
 Git timeout errors clean up the direct process and, on POSIX, its process group so helpers do not survive a timed-out command. Platform timeout overflows become readable Git errors. Independently detached helpers are outside the process-group guarantee.
+
+Human-readable exports retain bloodline summary metrics, ownership line-window scope, binary timeline totals, comparison status counts, binary markers, rename/copy sources, and tree object IDs. Empty CSV tables retain hotspot and requested cumulative columns. ASCII mode converts only drawing glyphs; repository text remains unchanged. Non-default rename thresholds disclose their effect on origin confidence.
