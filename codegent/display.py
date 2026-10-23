@@ -66,3 +66,10 @@ def safe_display(renderer):
     def wrapped(report, *args, **kwargs):
         return renderer(display_value(report), *args, **kwargs)
     return wrapped
+
+
+def ascii_graphics(text: str) -> str:
+    """Replace report drawing glyphs while retaining ordinary Unicode content."""
+    replacements = {**dict.fromkeys("╭╮╰╯├└┬┴┤┼", "+"), "─": "-", "│": "|",
+                    "▼": "v", "◆": "*", "◇": "o", "●": "*", "•": ".", "↷": ">"}
+    return text.translate(str.maketrans(replacements))

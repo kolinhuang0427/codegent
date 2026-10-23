@@ -29,7 +29,7 @@ def render_family_tree(bloodline: Bloodline, *, color: bool = True) -> str:
     if not bloodline.commits:
         return "  No lineage found."
     rendered: list[str] = []
-    for index, commit in enumerate(bloodline.commits):
+    for index, commit in enumerate(bloodline.display_commits):
         rendered.extend(_commit_box(commit, color=color))
         if index < len(bloodline.commits) - 1:
             rendered.append("          │")
@@ -70,10 +70,10 @@ def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
     lines = [
         "",
         f"  {heading('Gene Map:', color)} {bloodline.path}",
-        f"  {muted('oldest', color)}",
+        f"  {muted('newest' if bloodline.newest_first else 'oldest', color)}",
     ]
     lines.extend(f"  Warning: {warning}" for warning in bloodline.warnings)
-    for commit in bloodline.commits:
+    for commit in bloodline.display_commits:
         marker = _role_marker(commit.role)
         marker = paint(marker, _role_color(commit.role), color, bold=True)
         annotation = _milestone(commit)
@@ -88,7 +88,7 @@ def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
         if annotation:
             detail += f"  {annotation}"
         lines.append("  " + f"│   {muted(detail, color)}")
-    lines.append(f"  {muted('newest', color)}")
+    lines.append(f"  {muted('oldest' if bloodline.newest_first else 'newest', color)}")
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -135,6 +135,8 @@ def render_diff_lineage(diff: DiffLineage, *, color: bool = True) -> str:
         moved = ""
         if status == "renamed":
             moved = f" ({item.get('renamed_from')} -> {item.get('renamed_to')})"
+        elif status == "copied":
+            moved = f" (copy {item.get('copied_from')} -> {item.get('copied_to')})"
         lines.append(
             "  "
             + f"├─ {role(status, color)} {path}{moved} "

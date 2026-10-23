@@ -46,6 +46,9 @@ def iso_date(value: str) -> str:
         raise GitError(f"invalid ISO date: {value!r}") from exc
 
 
+CHANGE_STATUSES = frozenset({"added", "modified", "deleted", "renamed", "copied", "type-changed"})
+
+
 @dataclass(slots=True)
 class DiffLineage:
     repo: str
@@ -54,7 +57,12 @@ class DiffLineage:
     files: list[dict[str, Any]]
     stat: str
     paths: list[str] = field(default_factory=list)
+    statuses: list[str] = field(default_factory=list)
+    total_changed_files: int = 0
     rename_threshold: int = 50
+    merge_base: bool = False
+    find_copies: bool = False
+    input_a_resolved: str = ""
     resolved_a: str = ""
     resolved_b: str = ""
     ignore_whitespace: bool = False
@@ -75,12 +83,17 @@ class DiffLineage:
             "commit_a": self.commit_a,
             "commit_b": self.commit_b,
             "resolved_a": self.resolved_a,
+            "merge_base": self.merge_base,
+            "find_copies": self.find_copies,
+            "input_a_resolved": self.input_a_resolved,
             "resolved_b": self.resolved_b,
             "ignore_whitespace": self.ignore_whitespace,
             "files": self.files,
             "stat": self.stat,
             "summary": self.summary,
             "paths": self.paths,
+            "statuses": self.statuses,
+            "total_changed_files": self.total_changed_files,
             "rename_threshold": self.rename_threshold,
         }
 
@@ -202,6 +215,7 @@ class GitTracer:
         follow: bool | None = True,
         allow_empty: bool = False,
         first_parent: bool = False,
+        newest_first: bool = False,
     ) -> Bloodline:
         positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
@@ -255,16 +269,16 @@ class GitTracer:
         args.extend([resolved, "--", path])
 
         output = self.git(args)
-        newest_first = self._parse_log(output)
-        truncated = max_commits is not None and len(newest_first) > max_commits
+        newest_commits = self._parse_log(output)
+        truncated = max_commits is not None and len(newest_commits) > max_commits
         if truncated:
-            newest_first = newest_first[:max_commits]
-        if not newest_first and not allow_empty:
+            newest_commits = newest_commits[:max_commits]
+        if not newest_commits and not allow_empty:
             raise PathNotFoundError(
                 f"no matching history for {path!r}; check the path, ref, and filters"
             )
 
-        commits = list(reversed(newest_first))
+        commits = list(reversed(newest_commits))
         shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
         self._assign_roles(commits, complete=not (shallow or truncated or selection))
         return Bloodline(
@@ -273,6 +287,7 @@ class GitTracer:
             repo=self.root(),
             requested_ref=ref,
             resolved_ref=resolved,
+            newest_first=newest_first,
             followed_renames=bool(follow),
             max_commits=max_commits,
             truncated=truncated,
@@ -378,26 +393,49 @@ class GitTracer:
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
-    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None) -> DiffLineage:
+    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
+        if statuses and any(status not in CHANGE_STATUSES for status in statuses):
+            raise GitError("invalid comparison status filter")
+        selected_statuses = sorted(set(statuses or []))
         selected_paths = [self.normalize_path(path) for path in (paths or [])]
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
-        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
-        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
-        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
+        input_a_resolved = base
+        if merge_base:
+            bases = self.git(["merge-base", "--all", base, target], check=False).splitlines()
+            if len(bases) != 1:
+                raise GitError("comparison requires exactly one merge base; choose explicit refs")
+            base = bases[0]
+        detection = [f"--find-renames={self.rename_threshold}%"]
+        if find_copies:
+            detection.extend([f"--find-copies={self.rename_threshold}%", "--find-copies-harder"])
+        shared = ["diff", "--no-ext-diff", "--no-textconv", *detection]
+        refs = [base, target, "--", *selected_paths]
+        stat = self.git([*shared, "--stat", *refs])
+        numstat = self.git([*shared, "--numstat", "-z", *refs])
+        name_status = self.git([*shared, "--name-status", "-z", *refs])
         files = self._merge_diff_outputs(numstat, name_status)
+        total_changed_files = len(files)
+        if selected_statuses:
+            files = [item for item in files if item["status"] in selected_statuses]
+            stat = ""  # Git's unfiltered stat would misrepresent the selected rows.
         return DiffLineage(
             repo=self.root(),
             commit_a=commit_a,
             commit_b=commit_b,
             resolved_a=base,
+            merge_base=merge_base,
+            find_copies=find_copies,
+            input_a_resolved=input_a_resolved,
             resolved_b=target,
             ignore_whitespace=self.ignore_whitespace,
             files=files,
             stat=stat.rstrip(),
             paths=selected_paths,
+            statuses=selected_statuses,
+            total_changed_files=total_changed_files,
             rename_threshold=self.rename_threshold,
         )
 
@@ -499,8 +537,12 @@ class GitTracer:
             })
             entry["status"] = self._status_name(status)
             if old_path is not None:
-                entry["renamed_from"] = old_path
-                entry["renamed_to"] = path
+                if status.startswith("C"):
+                    entry.pop("renamed_from", None)
+                    entry.pop("renamed_to", None)
+                    entry["copied_from"], entry["copied_to"] = old_path, path
+                else:
+                    entry["renamed_from"], entry["renamed_to"] = old_path, path
         return list(stats_by_path.values())
 
     def _status_name(self, status: str) -> str:

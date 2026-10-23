@@ -13,9 +13,9 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .exports import render_markdown
-from .display import escape_text
+from .display import escape_text, ascii_graphics
 from ._version import __version__
-from .tracer import GitError, GitTracer
+from .tracer import GitError, GitTracer, CHANGE_STATUSES
 from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source
 from .tree import (
     render_ancestry,
@@ -53,6 +53,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for each Git process (default: 30)")
     common.add_argument("--rename-threshold", type=int, default=argparse.SUPPRESS, help="Rename similarity percentage, 1-100 (default: 50)")
     common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
+    common.add_argument("--newest-first", action="store_true", default=argparse.SUPPRESS, help="Present file history from newest to oldest")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
     common.add_argument("--grep", default=argparse.SUPPRESS, help="Literal commit-message substring")
     common.add_argument("--author", default=argparse.SUPPRESS, help="Literal author name/email substring")
@@ -63,6 +64,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     formats = common.add_mutually_exclusive_group()
     formats.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
     formats.add_argument("--markdown", action="store_true", default=argparse.SUPPRESS, help="Export a Markdown report")
+    common.add_argument("--ascii", action="store_true", default=argparse.SUPPRESS, help="Use plain ASCII drawing characters in terminal reports")
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
     common.add_argument(
         "--max-commits",
@@ -100,6 +102,9 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     diff = subparsers.add_parser("diff", parents=[common], help="Compare two commits")
     diff.add_argument("commit_a", help="Base commit/ref")
     diff.add_argument("commit_b", help="Target commit/ref")
+    diff.add_argument("--status", choices=sorted(CHANGE_STATUSES), action="append", default=[], help="Include selected change statuses (repeatable)")
+    diff.add_argument("--find-copies", action="store_true", help="Detect copies, including from unchanged source files")
+    diff.add_argument("--merge-base", action="store_true", help="Compare the shared ancestor against the target")
     diff.add_argument("--summary", action="store_true", help="Show only aggregate comparison statistics")
     diff.add_argument("--path", action="append", default=[], dest="paths", help="Restrict diff to a literal file/directory (repeatable)")
     diff.set_defaults(handler=_cmd_diff)
@@ -169,11 +174,13 @@ def main(argv: list[str] | None = None) -> int:
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
+    if args.command not in {"trace", "ancestry", "genemap", "bloodline"}:
+        invalid = invalid | {"newest_first"}
     unsupported = sorted(provided & invalid)
     if unsupported:
         flags = ["--no-follow" if key == "follow" else "--" + key.replace("_", "-") for key in unsupported]
         parser.error(f"{args.command} does not support {', '.join(flags)}")
-    color = supports_color(args.no_color) and not (args.json_output or args.markdown) and args.output in (None, "-")
+    color = supports_color(args.no_color or args.ascii) and not (args.json_output or args.markdown) and args.output in (None, "-")
     handler: Callable[[argparse.Namespace, bool], Any] = args.handler
     try:
         result = handler(args, color)
@@ -182,7 +189,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.markdown:
             output = render_markdown(result, args.command)
         else:
-            output = result
+            output = ascii_graphics(result) if args.ascii else result
         _write_output(output, args.output)
     except BrokenPipeError:
         # Redirect the descriptor so shutdown cannot flush the closed pipe again.
@@ -227,8 +234,8 @@ def _write_output(text: str, destination: str | None) -> None:
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -236,7 +243,7 @@ def _apply_defaults(args: argparse.Namespace) -> None:
 
 
 def _history_options(args: argparse.Namespace) -> dict[str, Any]:
-    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "grep": args.grep, "follow": args.follow, "first_parent": args.first_parent}
+    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "grep": args.grep, "follow": args.follow, "first_parent": args.first_parent, "newest_first": args.newest_first}
 
 
 def _tracer(args: argparse.Namespace) -> GitTracer:
@@ -281,7 +288,7 @@ def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
 
 
 def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths)
+    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths, merge_base=args.merge_base, find_copies=args.find_copies, statuses=args.status)
     if args.summary:
         report = diff.to_dict()
         report.pop("files")

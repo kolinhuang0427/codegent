@@ -242,3 +242,23 @@ and explicit entry-count truncation; submodule sizes are unknown rather than zer
 text without changing the checkout. JSON preserves selected content and line
 endings; display formats use numbered, escaped lines. Binary or oversized blobs
 are rejected before preview, and the size limit applies before line selection.
+
+`diff BASE TARGET --merge-base` compares the unique common ancestor to TARGET,
+matching a branch-review view. Requested refs and effective immutable comparison
+commits are recorded separately. Unrelated histories or multiple merge bases fail explicitly.
+
+`diff --find-copies` enables Git copy detection, including unchanged source
+files. Copies carry `copied_from`/`copied_to`, distinct from rename metadata.
+This optional search uses the configured similarity threshold and can cost more on large trees.
+
+`diff --status added --status deleted` filters comparison rows and summaries
+together. `total_changed_files` retains the pre-filter count, and the unfiltered
+Git stat is omitted so it cannot contradict the selected rows.
+
+`--newest-first` reverses the presentation of file-history entries in text, JSON,
+and Markdown. Origin/latest semantics and chronological line calculations remain
+unchanged; JSON records the selected `order`.
+
+`--ascii` replaces terminal drawing glyphs with plain ASCII and disables color.
+Unicode filenames and messages remain intact; use a UTF-8 terminal or file export
+for non-ASCII repository content.

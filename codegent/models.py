@@ -109,6 +109,7 @@ class Bloodline:
     repo: str
     requested_ref: str = "HEAD"
     resolved_ref: str = ""
+    newest_first: bool = False
     followed_renames: bool = True
     max_commits: int | None = None
     truncated: bool = False
@@ -116,6 +117,10 @@ class Bloodline:
     mailmap: bool = False
     rename_threshold: int = 50
     selection: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def display_commits(self) -> list[CommitNode]:
+        return list(reversed(self.commits)) if self.newest_first else self.commits
 
     @property
     def history_complete(self) -> bool:
@@ -226,7 +231,7 @@ class Bloodline:
                     migrated_to=commit.renamed_to,
                 )
             )
-        return genes
+        return list(reversed(genes)) if self.newest_first else genes
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -234,6 +239,7 @@ class Bloodline:
             "repo": self.repo,
             "requested_ref": self.requested_ref,
             "resolved_ref": self.resolved_ref,
+            "order": "newest-first" if self.newest_first else "oldest-first",
             "followed_renames": self.followed_renames,
             "max_commits": self.max_commits,
             "truncated": self.truncated,
@@ -254,6 +260,6 @@ class Bloodline:
             "current_carried_lines": self.current_carried_lines,
             "total_additions": self.total_additions,
             "total_deletions": self.total_deletions,
-            "commits": [commit.to_dict() for commit in self.commits],
+            "commits": [commit.to_dict() for commit in self.display_commits],
             "genes": [gene.to_dict() for gene in self.genes()],
         }
