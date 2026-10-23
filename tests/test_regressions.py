@@ -5,6 +5,27 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_wide_and_combining_text_fits_boxes_and_no_color_presence_is_respected(self):
+        import unicodedata
+        self.write("file.py")
+        self.commit("说明" * 100, env={"GIT_AUTHOR_NAME": "维护者" + "A\u0301" * 100})
+        result = self.cli("trace", "file.py", env={"NO_COLOR": "", "CLICOLOR_FORCE": "1"})
+        self.assertNotIn("\x1b", result.stdout)
+        boxes = [line for line in result.stdout.splitlines() if line.lstrip().startswith(("╭", "│", "╰"))]
+        widths = [sum(0 if unicodedata.combining(c) else 2 if unicodedata.east_asian_width(c) in "WF" else 1 for c in line) for line in boxes]
+        self.assertTrue(boxes)
+        self.assertEqual(set(widths), {78})
+
+    def test_repository_control_characters_are_inert_in_text_and_preserved_in_json(self):
+        name = "file\x1b[2J.py"
+        self.write(name)
+        self.commit("subject \x1b[2J")
+        result = self.cli("trace", name, "--no-color")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertNotIn("\x1b", result.stdout)
+        self.assertIn("\\x1b[2J", result.stdout)
+        self.assertEqual(self.payload("trace", name)["path"], name)
+
     def test_git_timeout_is_bounded_and_readable(self):
         fake_git = self.repo / "git"
         fake_git.write_text("#!/bin/sh\nexec /bin/sleep 5\n")

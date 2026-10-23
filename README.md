@@ -161,3 +161,11 @@ Omit `--output` or use `--output -` for stdout.
 `--markdown --output report.md` exports any report as portable Markdown tables,
 including history warnings. Repository text is escaped for HTML and table syntax.
 Choose one of `--markdown` and `--json`.
+
+Terminal and Markdown reports escape control characters and bidirectional override
+characters in repository-provided text. JSON preserves original strings with JSON
+escaping, including unusual filenames.
+
+Trace boxes truncate long fields by terminal cells, accounting for CJK wide and
+combining characters. `--no-color`, presence of `NO_COLOR`, and `TERM=dumb`
+disable color, including when `CLICOLOR_FORCE` is set.

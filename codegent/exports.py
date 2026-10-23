@@ -2,11 +2,12 @@
 from __future__ import annotations
 
 import html
+from .display import escape_text
 from typing import Any
 
 
 def _cell(value: Any) -> str:
-    return html.escape(str(value), quote=False).replace("\\", "\\\\").replace("|", "\\|").replace("`", "&#96;").replace("\n", "\\n").replace("\r", "\\r")
+    return html.escape(escape_text(str(value)), quote=False).replace("\\", "\\\\").replace("|", "\\|").replace("`", "&#96;").replace("\n", "\\n").replace("\r", "\\r")
 
 
 def _table(headers: list[str], rows: list[list[Any]]) -> list[str]:

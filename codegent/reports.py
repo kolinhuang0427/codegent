@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .display import safe_display
 from .models import Bloodline
 from .tracer import iso_date
 
@@ -35,6 +36,7 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
     }
 
 
+@safe_display
 def render_authors(report: dict[str, Any]) -> str:
     lines = [f"Authors: {report['path']}", "Commits  Churn  Author"]
     lines.extend(f"{row['commits']:7}  {row['churn']:5}  {row['author']}" for row in report["authors"])
@@ -66,6 +68,7 @@ def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", 
     }
 
 
+@safe_display
 def render_hotspots(report: dict[str, Any]) -> str:
     lines = [f"Hotspots: {report['path']}", "Churn  Commits  Path"]
     lines.extend(f"{row['churn']:5}  {row['commits']:7}  {row['path']}" for row in report["files"])
@@ -74,6 +77,7 @@ def render_hotspots(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
+@safe_display
 def render_owners(report: dict[str, Any]) -> str:
     lines = [f"Line ownership: {report['path']} ({report['selected_lines']} lines)", "Lines  Percent  Author"]
     lines.extend(f"{row['lines']:5}  {row['percentage']:6.2f}%  {row['author']}" for row in report["owners"])

@@ -32,12 +32,12 @@ ROLE_COLORS = {
 def supports_color(no_color: bool = False) -> bool:
     if no_color:
         return False
-    if os.environ.get("NO_COLOR"):
+    if "NO_COLOR" in os.environ or os.environ.get("TERM") == "dumb":
         return False
+    if os.environ.get("CLICOLOR_FORCE") not in (None, "", "0"):
+        return True
     if os.environ.get("CLICOLOR") == "0":
         return False
-    if os.environ.get("CLICOLOR_FORCE"):
-        return True
     return sys.stdout.isatty()
 
 
