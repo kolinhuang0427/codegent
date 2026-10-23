@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import os
 import math
+import re
 import subprocess
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Any
 
@@ -45,7 +46,18 @@ class DiffLineage:
     commit_b: str
     files: list[dict[str, Any]]
     stat: str
+    paths: list[str] = field(default_factory=list)
     rename_threshold: int = 50
+
+    @property
+    def summary(self) -> dict[str, Any]:
+        statuses: dict[str, int] = {}
+        for item in self.files:
+            status = item["status"]
+            statuses[status] = statuses.get(status, 0) + 1
+        return {"files": len(self.files), "additions": sum(item["additions"] for item in self.files),
+                "deletions": sum(item["deletions"] for item in self.files),
+                "binary_files": sum(int(item["binary"]) for item in self.files), "statuses": statuses}
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -54,6 +66,8 @@ class DiffLineage:
             "commit_b": self.commit_b,
             "files": self.files,
             "stat": self.stat,
+            "summary": self.summary,
+            "paths": self.paths,
             "rename_threshold": self.rename_threshold,
         }
 
@@ -144,7 +158,14 @@ class GitTracer:
         except GitError as exc:
             raise GitError(f"invalid commit/ref: {ref!r}") from exc
 
-    def trace_path(
+    def trace_path(self, path: str, ref: str = "HEAD", **options: Any) -> Bloodline:
+        return self._read_history(path, ref, **options)
+
+    def repository_history(self, path: str = ".", ref: str = "HEAD", **options: Any) -> Bloodline:
+        options.pop("follow", None)
+        return self._read_history(path, ref, follow=None, allow_empty=True, **options)
+
+    def _read_history(
         self,
         path: str,
         ref: str = "HEAD",
@@ -153,7 +174,8 @@ class GitTracer:
         since: str | None = None,
         until: str | None = None,
         author: str | None = None,
-        follow: bool = True,
+        follow: bool | None = True,
+        allow_empty: bool = False,
         first_parent: bool = False,
     ) -> Bloodline:
         if max_commits is not None and max_commits <= 0:
@@ -188,7 +210,7 @@ class GitTracer:
             selection["first_parent"] = True
         if follow:
             args.append("--follow")
-        else:
+        elif follow is False:
             selection["follow"] = False
         if author:
             selection["author"] = author
@@ -206,7 +228,7 @@ class GitTracer:
         truncated = max_commits is not None and len(newest_first) > max_commits
         if truncated:
             newest_first = newest_first[:max_commits]
-        if not newest_first:
+        if not newest_first and not allow_empty:
             raise PathNotFoundError(
                 f"no matching history for {path!r}; check the path, ref, and filters"
             )
@@ -219,7 +241,7 @@ class GitTracer:
             commits=commits,
             repo=self.root(),
             requested_ref=ref,
-            followed_renames=follow,
+            followed_renames=bool(follow),
             max_commits=max_commits,
             truncated=truncated,
             shallow=shallow,
@@ -228,14 +250,55 @@ class GitTracer:
             mailmap=self.mailmap,
         )
 
-    def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:
+    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None) -> dict[str, Any]:
+        path = self.normalize_path(path)
+        commit = self.resolve_ref(ref)
+        source = self.git(["cat-file", "blob", f"{commit}:{path}"])
+        if "\0" in source:
+            raise GitError("line ownership is unavailable for binary files")
+        file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
+        args = ["blame", "--line-porcelain"]
+        if lines:
+            match = re.fullmatch(r"([1-9][0-9]*):([1-9][0-9]*)", lines)
+            if not match:
+                raise GitError("--lines must be START:END with positive line numbers")
+            start, end = map(int, match.groups())
+            if start > end or end > file_lines:
+                raise GitError("line range is outside the file")
+            args.extend(["-L", f"{start},{end}"])
+        args.extend([commit, "--", path])
+        owners: dict[str, dict[str, Any]] = {}
+        current: dict[str, str] = {}
+        for line in self.git(args).split("\n"):
+            if re.match(r"^[0-9a-f]{40,64} ", line):
+                current = {"commit": line.split(" ", 1)[0]}
+            elif line.startswith("author "):
+                current["name"] = line[7:]
+            elif line.startswith("author-mail "):
+                current["email"] = line[12:].strip("<>")
+            elif line.startswith("\t"):
+                identity = f"{current['name']} <{current['email']}>"
+                row = owners.setdefault(identity, {"author": identity, "lines": 0, "commits": set()})
+                row["lines"] += 1
+                row["commits"].add(current["commit"])
+        total = sum(row["lines"] for row in owners.values())
+        rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"]))
+        for row in rows:
+            row["commits"] = sorted(row["commits"])
+            row["percentage"] = round(row["lines"] * 100 / total, 2) if total else 0
+        return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
+                "file_lines": file_lines, "selected_lines": total, "line_range": lines,
+                "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
+
+    def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
+        selected_paths = [self.normalize_path(path) for path in (paths or [])]
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
-        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", f"--find-renames={self.rename_threshold}%", base, target, "--"])
-        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--"])
-        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--"])
+        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
+        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
+        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected_paths])
         files = self._merge_diff_outputs(numstat, name_status)
         return DiffLineage(
             repo=self.root(),
@@ -243,6 +306,7 @@ class GitTracer:
             commit_b=commit_b,
             files=files,
             stat=stat.rstrip(),
+            paths=selected_paths,
             rename_threshold=self.rename_threshold,
         )
 
@@ -282,6 +346,7 @@ class GitTracer:
                 node.deletions += item["deletions"]
                 node.binary = node.binary or item["binary"]
                 node.files.append(item["path"])
+                node.changes.append(item)
                 if "renamed_from" in item:
                     node.renamed_from = item["renamed_from"]
                     node.renamed_to = item["renamed_to"]

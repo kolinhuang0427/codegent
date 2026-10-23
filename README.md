@@ -126,3 +126,27 @@ mailmap configuration. Without it, history reports preserve recorded identities.
 counts, additions, deletions, binary changes, and first/last author dates per
 identity. Sorting supports `commits`, `churn`, and `name`. All history filters apply.
 Churn measures changed lines, not quality or current ownership.
+
+### Repository hotspots
+
+`codegent hotspots src --sort churn --min-commits 2 --limit 20 --json` ranks
+historical paths by changed lines or commit count. Omit `src` to scan the repository.
+History date, author, ref, first-parent, and commit-limit options apply. Binary
+changes are counted separately. Historical names remain separate across renames;
+churn is a triage signal, not evidence of defects.
+
+### Surviving-line attribution
+
+`codegent owners src/auth.py --ref HEAD --lines 10:40 --json` uses Git blame to
+report the authors of surviving text lines, percentages, and contributing commit
+IDs. The inclusive line range is optional. It reads committed content, excluding
+uncommitted edits. Identities follow Git blame's mailmap behavior. Binary files
+are rejected; this is line attribution, not code quality or legal ownership.
+
+`codegent diff v1.0.0 HEAD --path src --path README.md` restricts a comparison to
+repeatable literal file/directory paths. Git detects renames within that selected
+path set; including both old and new paths preserves cross-directory comparisons.
+
+`diff --summary` emits aggregate file/status counts, text additions/deletions, and
+binary-file counts. Full diff JSON also includes the same `summary` object.
+Binary changes are counted as files, not invented line counts.

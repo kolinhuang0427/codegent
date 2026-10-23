@@ -31,6 +31,7 @@ class CommitNode:
     deletions: int = 0
     files: list[str] = field(default_factory=list)
     binary: bool = False
+    changes: list[dict[str, Any]] = field(default_factory=list)
     renamed_from: str | None = None
     renamed_to: str | None = None
     role: str = "descendant"
@@ -57,6 +58,7 @@ class CommitNode:
             "additions": self.additions,
             "deletions": self.deletions,
             "files": self.files,
+            "changes": self.changes,
             "binary": self.binary,
             "renamed_from": self.renamed_from,
             "renamed_to": self.renamed_to,

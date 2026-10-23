@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .tracer import GitError, GitTracer
-from .reports import author_report, render_authors
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -75,6 +75,8 @@ def build_parser() -> argparse.ArgumentParser:
     diff = subparsers.add_parser("diff", parents=[common], help="Compare two commits")
     diff.add_argument("commit_a", help="Base commit/ref")
     diff.add_argument("commit_b", help="Target commit/ref")
+    diff.add_argument("--summary", action="store_true", help="Show only aggregate comparison statistics")
+    diff.add_argument("--path", action="append", default=[], dest="paths", help="Restrict diff to a literal file/directory (repeatable)")
     diff.set_defaults(handler=_cmd_diff)
 
     authors = subparsers.add_parser("authors", parents=[common], help="Summarize authors and churn for a file")
@@ -82,6 +84,18 @@ def build_parser() -> argparse.ArgumentParser:
     authors.add_argument("--sort", choices=("commits", "churn", "name"), default="commits")
     authors.add_argument("--limit", type=positive_int, default=20)
     authors.set_defaults(handler=_cmd_authors)
+
+    hotspots = subparsers.add_parser("hotspots", parents=[common], help="Rank historical paths by change activity")
+    hotspots.add_argument("path", nargs="?", default=".")
+    hotspots.add_argument("--sort", choices=("churn", "commits"), default="churn")
+    hotspots.add_argument("--limit", type=positive_int, default=20)
+    hotspots.add_argument("--min-commits", type=positive_int, default=1)
+    hotspots.set_defaults(handler=_cmd_hotspots)
+
+    owners = subparsers.add_parser("owners", parents=[common], help="Report surviving-line attribution at a commit")
+    owners.add_argument("path")
+    owners.add_argument("--lines", help="Inclusive START:END line range")
+    owners.set_defaults(handler=_cmd_owners)
 
     return parser
 
@@ -162,7 +176,16 @@ def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
 
 
 def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b)
+    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b, paths=args.paths)
+    if args.summary:
+        report = {"repo": diff.repo, "commit_a": diff.commit_a, "commit_b": diff.commit_b,
+                  "paths": diff.paths, "summary": diff.summary}
+        if args.json_output:
+            return report
+        summary = diff.summary
+        return (f"{summary['files']} files: +{summary['additions']} -{summary['deletions']} lines; "
+                f"{summary['binary_files']} binary files\n" +
+                ", ".join(f"{key}={value}" for key, value in sorted(summary["statuses"].items())))
     if args.json_output:
         return diff.to_dict()
     return render_diff_lineage(diff, color=color)
@@ -171,6 +194,17 @@ def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 def _cmd_authors(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = author_report(_history(args), sort=args.sort, limit=args.limit)
     return report if args.json_output else render_authors(report)
+
+
+def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
+    report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits)
+    return report if args.json_output else render_hotspots(report)
+
+
+def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines)
+    return report if args.json_output else render_owners(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

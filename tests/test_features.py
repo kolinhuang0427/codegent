@@ -2,6 +2,59 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_diff_summary_counts_text_binary_and_statuses(self):
+        self.write("old.py", "old\n")
+        base = self.commit()
+        self.git("rm", "old.py")
+        self.write("new.py", "new\nnewer\n")
+        (self.repo / "binary.dat").write_bytes(b"\0binary")
+        self.commit()
+        result = self.payload("diff", base, "HEAD", "--summary")
+        summary = result["summary"]
+        self.assertEqual(summary["files"], 3)
+        self.assertEqual(summary["additions"], 2)
+        self.assertEqual(summary["deletions"], 1)
+        self.assertEqual(summary["binary_files"], 1)
+        self.assertEqual(summary["statuses"], {"added": 2, "deleted": 1})
+
+    def test_diff_path_filters_are_literal_and_repeatable(self):
+        self.write("src/[ab].py")
+        self.write("other.py")
+        base = self.commit()
+        self.write("src/[ab].py", "changed\n")
+        self.write("other.py", "other changed\n")
+        self.commit()
+        report = self.payload("diff", base, "HEAD", "--path", "src/[ab].py")
+        self.assertEqual([row["path"] for row in report["files"]], ["src/[ab].py"])
+        both = self.payload("diff", base, "HEAD", "--path", "src", "--path", "other.py")
+        self.assertEqual(len(both["files"]), 2)
+
+    def test_owners_reports_surviving_lines_at_a_committed_ref(self):
+        self.write("file.py")
+        original = self.commit()
+        self.write("file.py", "one\nSECOND\nthree\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        self.write("file.py", "uncommitted\n")
+        report = self.payload("owners", "file.py")
+        self.assertEqual([row["lines"] for row in report["owners"]], [2, 1])
+        selected = self.payload("owners", "file.py", "--lines", "2:2")
+        self.assertEqual(selected["owners"][0]["percentage"], 100)
+        self.assertIn("Second", selected["owners"][0]["author"])
+        self.assertEqual(len(self.payload("owners", "file.py", "--ref", original)["owners"]), 1)
+
+    def test_hotspots_aggregate_per_file_and_support_directory_scope(self):
+        self.write("src/hot.py", "one\n")
+        self.write("cold.py", "cold\n")
+        self.commit()
+        self.write("src/hot.py", "one\ntwo\n")
+        self.commit()
+        report = self.payload("hotspots", "--min-commits", "2")
+        self.assertEqual([row["path"] for row in report["files"]], ["src/hot.py"])
+        self.assertEqual(report["files"][0]["commits"], 2)
+        self.assertEqual(report["files"][0]["additions"], 2)
+        self.assertEqual(self.payload("hotspots", "src")["matching_files"], 1)
+        self.assertEqual(self.payload("hotspots", "missing")["files"], [])
+
     def test_author_report_aggregates_multiple_commits_per_identity(self):
         self.write("file.py", "one\n")
         self.commit()
