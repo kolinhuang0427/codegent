@@ -469,9 +469,12 @@ class GitTracer:
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 
-    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False, detect_copies: bool = False, group_by: str = "author", max_bytes: int = 1048576) -> dict[str, Any]:
+    def owners(self, path: str, ref: str = "HEAD", *, lines: str | None = None, ignore_revs_file: str | None = None, detect_moves: bool = False, detect_copies: bool = False, group_by: str = "author", max_bytes: int = 1048576, sort: str = "lines", limit: int | None = None) -> dict[str, Any]:
         path = self.normalize_path(path)
         commit = self.resolve_ref(ref)
+        positive_count(limit, "limit", allow_none=True)
+        if sort not in {"lines", "author"}:
+            raise GitError("ownership sort must be lines or author")
         if group_by not in {"author", "commit"}:
             raise GitError("ownership grouping must be author or commit")
         source, size = self._text_blob(commit, path, max_bytes=max_bytes, purpose="line ownership")
@@ -500,7 +503,7 @@ class GitTracer:
         args.extend([commit, "--", path])
         owners = self._parse_blame(self.git(args), group_by=group_by)
         total = sum(row["lines"] for row in owners.values())
-        rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"], row.get("commit", "")))
+        rows = sorted(owners.values(), key=lambda row: (0 if sort == "author" else -row["lines"], row["author"], row.get("commit", "")))
         for row in rows:
             row["commits"] = sorted(row["commits"])
             row["percentage"] = round(row["lines"] * 100 / total, 2) if total else 0
@@ -510,7 +513,9 @@ class GitTracer:
                 "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines, "size": size, "max_bytes": max_bytes,
                 "ignore_revs_file": ignored_file, "ignore_whitespace": self.ignore_whitespace, "detect_moves": detect_moves, "detect_copies": detect_copies, "group_by": group_by,
-                "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
+                "sort": sort, "limit": limit, "total_groups": len(rows), "displayed_groups": len(rows[:limit]),
+                "omitted_lines": sum(row["lines"] for row in rows[len(rows[:limit]):]),
+                "owners": rows[:limit], "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
     def _parse_blame(self, output: str, *, group_by: str = "author") -> dict[str, dict[str, Any]]:
         try:

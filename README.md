@@ -376,3 +376,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `inventory [PATH] --group-by extension|directory --depth N --sort bytes|entries|name --limit N` summarizes the complete committed tree before limiting groups. Extension groups are case-folded; extensionless files use `(none)`. Groups include entry counts, known object bytes, unknown-size entries, and Git modes. Bytes measure Git objects, including symlink contents, rather than checkout disk usage.
 
 `divergence BASE TARGET` reports locally reachable commits unique to each side, shared commits, all merge bases, and whether the tips are equal, ancestors, diverged, or unrelated. It resolves both tips once and does not fetch. Shallow repositories explicitly warn that counts and relationships describe only available history.
+
+`owners --sort lines|author --limit N` ranks and limits author/commit groups after attribution. Percentages retain the full selected-line denominator; reports disclose total/displayed groups and omitted line counts. Without `--limit`, all attribution groups remain visible.

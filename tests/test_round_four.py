@@ -278,3 +278,18 @@ class RoundFourTests(RepositoryCase):
         for flag in ("--csv", "--markdown", "--no-color"):
             self.assertEqual(self.cli("divergence", "main", "side", flag).returncode, 0)
         self.assertEqual(self.cli("divergence", "main", "side", "--max-commits", "1").returncode, 2)
+
+    def test_ownership_ranking_keeps_full_denominator_when_limited(self):
+        self.write("a", "one\ntwo\n")
+        self.commit()
+        self.write("a", "one\ntwo\nthree\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "AAA", "GIT_AUTHOR_EMAIL": "a@example.test"})
+        report = self.payload("owners", "a", "--sort", "author", "--limit", "1")
+        self.assertEqual(report["total_groups"], 2)
+        self.assertEqual(report["displayed_groups"], 1)
+        self.assertEqual(report["owners"][0]["percentage"], 33.33)
+        self.assertEqual(report["omitted_lines"], 2)
+        self.assertEqual(report["selected_lines"], 3)
+        self.assertEqual(self.payload("owners", "a", "--limit", "1")["owners"][0]["lines"], 2)
+        md = self.cli("owners", "a", "--limit", "1", "--markdown")
+        self.assertIn("omitted lines: 1", md.stdout)

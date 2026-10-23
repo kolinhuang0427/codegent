@@ -54,7 +54,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])
         lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []), [
             [row[key] for key in keys] for row in report["owners"]])
-        lines += ["", _cell(report["attribution"])]
+        lines += ["", f"Showing {report['displayed_groups']} of {report['total_groups']} groups; omitted lines: {report['omitted_lines']}.", _cell(report["attribution"])]
     elif command == "patch":
         preview = "\n".join(escape_text(line) for line in report["patch"].split("\n"))
         longest = max((len(match.group()) for match in re.finditer(r"`+", preview)), default=0)
