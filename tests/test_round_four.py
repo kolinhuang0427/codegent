@@ -158,3 +158,17 @@ class RoundFourTests(RepositoryCase):
         row = list(csv.DictReader(io.StringIO(result.stdout)))[0]
         self.assertEqual(row["peeled_type"], "commit")
         self.assertNotIn("peeled_object_type", row)
+
+    def test_file_byte_bounds_are_inclusive_and_precede_limit(self):
+        self.write("empty", "")
+        self.write("small", "abc")
+        self.write("large", "abcdefghij")
+        self.commit()
+        report = self.payload("files", "--min-bytes", "3", "--max-bytes", "3", "--limit", "1")
+        self.assertEqual([r["path"] for r in report["files"]], ["small"])
+        self.assertEqual(report["total_files"], 3)
+        self.assertEqual(report["matching_files"], 1)
+        self.assertEqual(report["total_bytes"], 3)
+        self.assertEqual(self.payload("files", "--max-bytes", "0")["files"][0]["path"], "empty")
+        self.assertEqual(self.cli("files", "--min-bytes", "4", "--max-bytes", "3").returncode, 1)
+        self.assertEqual(len(GitTracer(str(self.repo)).tracked_files(limit=None)["files"]), 3)

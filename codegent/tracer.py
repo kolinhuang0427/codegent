@@ -39,6 +39,11 @@ def positive_count(value: int | None, name: str, *, allow_none: bool = False) ->
         raise GitError(f"{name} must be a positive integer" + (" or None" if allow_none else ""))
 
 
+def nonnegative_count(value: int, name: str) -> None:
+    if type(value) is not int or value < 0:
+        raise GitError(f"{name} must be a nonnegative integer")
+
+
 def iso_date(value: str) -> str:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
@@ -370,8 +375,13 @@ class GitTracer:
                 "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "-z"])),
                 "timeout_seconds": self.timeout}
 
-    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000, sort: str = "path", kind: str = "all") -> dict[str, Any]:
-        positive_count(limit, "limit")
+    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int | None = 1000, sort: str = "path", kind: str = "all", min_bytes: int | None = None, max_bytes: int | None = None) -> dict[str, Any]:
+        positive_count(limit, "limit", allow_none=True)
+        for bound, name in ((min_bytes, "min_bytes"), (max_bytes, "max_bytes")):
+            if bound is not None:
+                nonnegative_count(bound, name)
+        if min_bytes is not None and max_bytes is not None and min_bytes > max_bytes:
+            raise GitError("minimum file size must not exceed maximum")
         if sort not in {"path", "size"}:
             raise GitError("file sort must be path or size")
         path = self.normalize_path(path)
@@ -383,11 +393,15 @@ class GitTracer:
         files = self._parse_tree(output)
         total_files = len(files)
         files = [item for item in files if kind == "all" or item["mode"] == modes[kind]]
+        if min_bytes is not None or max_bytes is not None:
+            files = [item for item in files if item["size"] is not None
+                     and (min_bytes is None or item["size"] >= min_bytes)
+                     and (max_bytes is None or item["size"] <= max_bytes)]
         files.sort(key=lambda item: (item["path"],) if sort == "path" else (item["size"] is None, -(item["size"] or 0), item["path"]))
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
-                "sort": sort, "unknown_size_entries": sum(item["size"] is None for item in files),
+                "sort": sort, "min_bytes": min_bytes, "max_bytes": max_bytes, "unknown_size_entries": sum(item["size"] is None for item in files),
                 "kind": kind, "total_files": total_files, "matching_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
-                "truncated": len(files) > limit, "files": files[:limit]}
+                "truncated": limit is not None and len(files) > limit, "files": files[:limit]}
 
     def _parse_tree(self, output: str) -> list[dict[str, Any]]:
         try:
