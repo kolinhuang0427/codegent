@@ -348,3 +348,5 @@ Unified patch previews explicitly use `a/` and `b/` prefixes and repository-root
 Repository-wide history and commit ranges include empty commits and merge commits. A literal file/directory scope still uses Git path-limited traversal and can omit commits that do not change that scope. Merge statistics follow Git's default history presentation.
 
 History `--ignore-case` makes literal `--author` and `--grep` matching case-insensitive. It requires one of these filters and records the setting in selection metadata.
+
+History `--merges` selects commits with multiple parents; `--no-merges` excludes them. Merge selection is recorded separately from first-parent traversal, and scoped Git traversal can still omit merges unrelated to the path.

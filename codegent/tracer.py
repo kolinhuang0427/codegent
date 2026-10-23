@@ -218,6 +218,7 @@ class GitTracer:
         author: str | None = None,
         grep: str | None = None,
         ignore_case: bool = False,
+        merge_filter: str | None = None,
         follow: bool | None = True,
         allow_empty: bool = False,
         first_parent: bool = False,
@@ -252,6 +253,11 @@ class GitTracer:
         ]
         if self.ignore_whitespace:
             selection["ignore_whitespace"] = True
+        if merge_filter not in {None, "merges", "no-merges"}:
+            raise GitError("merge filter must be merges or no-merges")
+        if merge_filter:
+            args.append("--" + merge_filter)
+            selection["merge_filter"] = merge_filter
         if first_parent:
             args.append("--first-parent")
             selection["first_parent"] = True

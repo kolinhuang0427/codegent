@@ -71,3 +71,18 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(self.payload("authors", "a", "--author", "FIRST AUTHOR", "--ignore-case")["total_authors"], 1)
         self.assertEqual(self.cli("files", "--ignore-case", "--grep", "a").returncode, 2)
         self.assertEqual(self.cli("trace", "a", "--ignore-case").returncode, 2)
+
+    def test_history_merge_selection(self):
+        self.write("a")
+        base = self.commit()
+        self.git("checkout", "-b", "side")
+        self.write("b")
+        self.commit()
+        self.git("checkout", "main")
+        self.git("merge", "--no-ff", "side", "-m", "integration")
+        merges = self.payload("commits", base, "HEAD", "--merges")
+        self.assertEqual(merges["total_commits"], 1)
+        self.assertEqual(len(merges["commits"][0]["parents"]), 2)
+        self.assertEqual(self.payload("commits", base, "HEAD", "--no-merges")["total_commits"], 1)
+        self.assertEqual(self.cli("files", "--merges").returncode, 2)
+        self.assertEqual(self.cli("--merges", "timeline", "--no-merges").returncode, 0)
