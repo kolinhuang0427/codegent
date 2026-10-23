@@ -37,6 +37,21 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += _table(["Author", "Lines", "Percent"], [
             [row[key] for key in ("author", "lines", "percentage")] for row in report["owners"]])
         lines += ["", _cell(report["attribution"])]
+    elif command == "source":
+        lines += _table(["Line", "Text"], [[row["number"], row["text"]] for row in report["lines"]])
+    elif command == "files":
+        lines += _table(["Path", "Mode", "Type", "Bytes", "Object ID"], [
+            [row[key] for key in ("path", "mode", "type", "size", "object_id")] for row in report["files"]])
+        lines += ["", f"Showing {len(report['files'])} of {report['total_files']} entries."]
+    elif command == "cochange":
+        lines += _table(["Path", "Shared commits", "Fraction"], [
+            [row[key] for key in ("path", "shared_commits", "fraction")] for row in report["files"]])
+        lines += ["", _cell(report["interpretation"])]
+    elif command == "timeline":
+        lines += _table(["Period", "Commits", "Authors", "Files", "+", "-"], [
+            [row[key] for key in ("period", "commits", "authors", "files", "additions", "deletions")]
+            for row in report["periods"]])
+        lines += ["", _cell(report["date_basis"])]
     elif command == "diff":
         summary = report["summary"]
         lines += _table(["Files", "Additions", "Deletions", "Binary files"], [

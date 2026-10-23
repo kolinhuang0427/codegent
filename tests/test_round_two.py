@@ -181,3 +181,56 @@ class RoundTwoTests(RepositoryCase):
         self.assertEqual(report["matching_authors"], 1)
         self.assertEqual(report["omitted_authors"], 1)
         self.assertEqual(report["authors"][0]["commits"], 2)
+
+    def test_timeline_groups_author_dates_in_utc(self):
+        self.write("file.py")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-01-31T23:30:00-02:00", "GIT_COMMITTER_DATE": "2026-02-01T01:30:00Z"})
+        self.write("file.py", "two\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-02-15T12:00:00Z", "GIT_COMMITTER_DATE": "2026-02-15T12:00:00Z"})
+        self.write("other.py")
+        self.commit(env={"GIT_AUTHOR_DATE": "2026-03-01T12:00:00Z", "GIT_COMMITTER_DATE": "2026-03-01T12:00:00Z"})
+        report = self.payload("timeline")
+        self.assertEqual([row["period"] for row in report["periods"]], ["2026-02", "2026-03"])
+        self.assertEqual([row["commits"] for row in report["periods"]], [2, 1])
+        self.assertIn("# codegent timeline", self.cli("timeline", "--markdown").stdout)
+
+    def test_cochange_ranks_companions_without_claiming_dependencies(self):
+        for name in ("a.py", "b.py", "c.py"):
+            self.write(name)
+        self.commit()
+        self.write("a.py", "changed\n")
+        self.write("b.py", "changed\n")
+        self.commit()
+        result = self.payload("cochange", "a.py")
+        self.assertEqual(result["target_commits"], 2)
+        self.assertEqual([(r["path"], r["shared_commits"]) for r in result["files"]], [("b.py", 2), ("c.py", 1)])
+        filtered = self.payload("cochange", "a.py", "--min-shared", "2")
+        self.assertEqual(filtered["matching_files"], 1)
+        self.assertIn("not a dependency", filtered["interpretation"])
+
+    def test_files_lists_historical_objects_and_executable_modes(self):
+        name = "src/中文\tfile.py"
+        self.write(name, "abc\n")
+        self.write("tool.sh", "#!/bin/sh\n")
+        (self.repo / "tool.sh").chmod(0o755)
+        original = self.commit()
+        self.write("new.py")
+        self.commit()
+        report = self.payload("files", "--ref", original)
+        self.assertEqual(report["total_files"], 2)
+        rows = {row["path"]: row for row in report["files"]}
+        self.assertEqual(rows[name]["size"], 4)
+        self.assertEqual(rows["tool.sh"]["mode"], "100755")
+        self.assertTrue(self.payload("files", "--limit", "1")["truncated"])
+
+    def test_source_previews_committed_text_with_line_and_byte_bounds(self):
+        self.write("file.py", "one\ntwo\nthree")
+        original = self.commit()
+        self.write("file.py", "uncommitted\n")
+        report = self.payload("source", "file.py", "--ref", original, "--lines", "2:2")
+        self.assertEqual(report["content"], "two\n")
+        self.assertEqual(report["lines"], [{"number": 2, "text": "two"}])
+        self.assertEqual(self.payload("source", "file.py")["file_lines"], 3)
+        oversized = self.cli("source", "file.py", "--max-bytes", "3", "--json")
+        self.assertIn("exceeds", json.loads(oversized.stderr)["error"])
+        self.assertIn("# codegent source", self.cli("source", "file.py", "--markdown").stdout)

@@ -16,7 +16,7 @@ from .exports import render_markdown
 from .display import escape_text
 from ._version import __version__
 from .tracer import GitError, GitTracer
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -126,6 +126,28 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     owners.add_argument("--lines", help="Inclusive START:END line range")
     owners.set_defaults(handler=_cmd_owners)
 
+    timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author-date periods")
+    timeline.add_argument("path", nargs="?", default=".")
+    timeline.add_argument("--period", choices=("day", "month", "year"), default="month")
+    timeline.set_defaults(handler=_cmd_timeline)
+
+    cochange = subparsers.add_parser("cochange", parents=[common], help="Find files changed in the same commits as a target")
+    cochange.add_argument("path")
+    cochange.add_argument("--limit", type=positive_int, default=20)
+    cochange.add_argument("--min-shared", type=positive_int, default=1)
+    cochange.set_defaults(handler=_cmd_cochange)
+
+    files = subparsers.add_parser("files", parents=[common], help="List tracked files and object metadata at a commit")
+    files.add_argument("path", nargs="?", default=".")
+    files.add_argument("--limit", type=positive_int, default=1000)
+    files.set_defaults(handler=_cmd_files)
+
+    source = subparsers.add_parser("source", parents=[common], help="Preview a bounded text blob at a commit")
+    source.add_argument("path")
+    source.add_argument("--lines", help="Inclusive START:END line range")
+    source.add_argument("--max-bytes", type=positive_int, default=1048576)
+    source.set_defaults(handler=_cmd_source)
+
     return parser
 
 
@@ -142,6 +164,10 @@ def main(argv: list[str] | None = None) -> int:
         "diff": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
         "hotspots": {"follow"},
+        "timeline": {"follow"},
+        "cochange": {"follow"},
+        "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
+        "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
     unsupported = sorted(provided & invalid)
     if unsupported:
@@ -289,6 +315,30 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).owners(args.path, args.ref, lines=args.lines)
     return report if args.json_output or args.markdown else render_owners(report)
+
+
+def _cmd_timeline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
+    report = timeline_report(history, period=args.period)
+    return report if args.json_output or args.markdown else render_timeline(report)
+
+
+def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    tracer = _tracer(args)
+    path = tracer.normalize_path(args.path)
+    history = tracer.repository_history(tracer.root(), args.ref, **_history_options(args))
+    report = cochange_report(history, path, limit=args.limit, min_shared=args.min_shared)
+    return report if args.json_output or args.markdown else render_cochange(report)
+
+
+def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).tracked_files(args.path, args.ref, limit=args.limit)
+    return report if args.json_output or args.markdown else render_files(report)
+
+
+def _cmd_source(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes)
+    return report if args.json_output or args.markdown else render_source(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:
