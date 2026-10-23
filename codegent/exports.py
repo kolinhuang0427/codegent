@@ -28,11 +28,15 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += _table(["Author", "Commits", "Additions", "Deletions", "Churn"], [
             [row[key] for key in ("author", "commits", "additions", "deletions", "churn")]
             for row in report["authors"]])
+        lines += ["", f"Showing {report['displayed_authors']} of {report['total_authors']} author groups; "
+                  f"matching: {report['matching_authors']}; omitted: {report['omitted_authors']}.",
+                  f"Grouping: {_cell(report['group_by'])}; minimum commits: {report['min_commits']}."]
     elif command == "hotspots":
         lines += _table(["Path", "Commits", "Churn", "Binary changes"], [
             [row[key] for key in ("path", "commits", "churn", "binary_changes")]
             for row in report["files"]])
-        lines += ["", _cell(report["path_policy"])]
+        lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching paths.",
+                  _cell(report["path_policy"])]
     elif command == "owners":
         lines += _table(["Author", "Lines", "Percent"], [
             [row[key] for key in ("author", "lines", "percentage")] for row in report["owners"]])
@@ -48,7 +52,8 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
     elif command == "cochange":
         lines += _table(["Path", "Shared commits", "Fraction"], [
             [row[key] for key in ("path", "shared_commits", "fraction")] for row in report["files"]])
-        lines += ["", _cell(report["interpretation"])]
+        lines += ["", f"Target commits: {report['target_commits']}; showing {len(report['files'])} "
+                  f"of {report['matching_files']} matching paths.", _cell(report["interpretation"])]
     elif command == "timeline":
         lines += _table(["Period", "Commits", "Authors", "Files", "+", "-"], [
             [row[key] for key in ("period", "commits", "authors", "files", "additions", "deletions")]
@@ -56,6 +61,8 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", _cell(report["date_basis"])]
     elif command == "diff":
         summary = report["summary"]
+        lines += [f"Selected changes: {summary['files']} of {report['total_changed_files']}; "
+                  f"statuses: {_cell(', '.join(report['statuses']) or 'all')}.", ""]
         lines += _table(["Files", "Additions", "Deletions", "Binary files"], [
             [summary[key] for key in ("files", "additions", "deletions", "binary_files")]])
         if "files" in report:

@@ -34,10 +34,20 @@ def positive_int(value: str) -> int:
     return number
 
 
+def _stream_text(message: str, stream) -> str:
+    encoding = getattr(stream, "encoding", None) or "utf-8"
+    return message.encode(encoding, "backslashreplace").decode(encoding)
+
+
 class ReportArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, json_errors: bool = False, **kwargs):
         self.json_errors = json_errors
         super().__init__(*args, **kwargs)
+
+    def _print_message(self, message, file=None):
+        stream = file or sys.stderr
+        if message:
+            super()._print_message(_stream_text(message, stream), stream)
 
     def error(self, message: str) -> None:
         if self.json_errors:
@@ -131,6 +141,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     owners = subparsers.add_parser("owners", parents=[common], help="Report surviving-line attribution at a commit")
     owners.add_argument("path")
+    owners.add_argument("--max-bytes", type=positive_int, default=1048576, help="Maximum blob size before attribution (default: 1 MiB)")
     owners.add_argument("--detect-moves", action="store_true", help="Retain attribution across within-file moved blocks")
     owners.add_argument("--ignore-revs-file", help="Ignore listed mechanical commits when attributing lines")
     owners.add_argument("--lines", help="Inclusive START:END line range")
@@ -344,7 +355,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves)
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, max_bytes=args.max_bytes)
     return report if args.json_output or args.markdown else render_owners(report)
 
 
@@ -378,8 +389,6 @@ def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:
-    if json_output:
-        print(json.dumps({"error": message}), file=sys.stderr)
-    else:
-        print(danger(f"codegent: {escape_text(message)}", color), file=sys.stderr)
+    rendered = json.dumps({"error": message}) if json_output else danger(f"codegent: {escape_text(message)}", color)
+    print(_stream_text(rendered, sys.stderr), file=sys.stderr)
     return 1
