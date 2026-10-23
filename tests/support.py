@@ -29,6 +29,8 @@ class RepositoryCase(unittest.TestCase):
         ).stdout.strip()
 
     def write(self, path, text="one\ntwo\nthree\n"):
+        if os.name == "nt" and any(ord(char) < 32 for char in path):
+            self.skipTest("Windows filenames cannot contain control characters")
         target = self.repo / path
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(text)

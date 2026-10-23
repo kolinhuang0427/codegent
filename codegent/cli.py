@@ -48,6 +48,7 @@ def _stream_text(message: str, stream) -> str:
 
 class ReportArgumentParser(argparse.ArgumentParser):
     def __init__(self, *args, json_errors: bool = False, **kwargs):
+        kwargs.setdefault("allow_abbrev", False)
         self.json_errors = json_errors
         super().__init__(*args, **kwargs)
 
@@ -273,7 +274,7 @@ def main(argv: list[str] | None = None) -> int:
         "directories": {"follow"},
         "hotspots": {"follow"},
         "timeline": {"follow"},
-        "cochange": {"follow"},
+        "cochange": {"follow", "mailmap"},
         "commits": {"ref", "follow"},
         "patch": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "refs": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
@@ -345,7 +346,10 @@ def _write_output(text: str, destination: str | None, *, no_clobber: bool = Fals
             stream.write(text)
             stream.flush()
             if existing_mode is not None and not no_clobber:
-                os.fchmod(stream.fileno(), existing_mode)
+                if hasattr(os, "fchmod"):
+                    os.fchmod(stream.fileno(), existing_mode)
+                else:
+                    os.chmod(stream.name, existing_mode)
             os.fsync(stream.fileno())
         if no_clobber:
             os.link(temporary, target)  # Atomic exclusive creation on the same filesystem.

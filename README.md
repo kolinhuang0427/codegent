@@ -399,3 +399,5 @@ This version adds directory history, complete committed-tree inventory summaries
 and branch divergence, plus the history/ref/file/source/blame/timeline controls
 listed above. CI exercises source tests and all 19 installed commands outside
 the checkout on Linux/macOS with Python 3.10/3.12. The package remains dependency-free.
+
+Review fixes preserve legacy positional model arguments, normalize platform path syntax and external subtree aliases, reject empty/abbreviated scope options, include untracked files in diagnostics, and preserve existing export permissions when descriptor-based chmod is unavailable.
