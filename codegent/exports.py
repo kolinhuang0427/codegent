@@ -37,6 +37,8 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += _table(["Author", "Lines", "Percent"], [
             [row[key] for key in ("author", "lines", "percentage")] for row in report["owners"]])
         lines += ["", _cell(report["attribution"])]
+    elif command == "doctor":
+        lines += _table(["Check", "Value"], [[key, value] for key, value in report.items()])
     elif command == "source":
         lines += _table(["Line", "Text"], [[row["number"], row["text"]] for row in report["lines"]])
     elif command == "files":

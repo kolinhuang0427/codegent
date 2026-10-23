@@ -300,3 +300,90 @@ class RoundTwoTests(RepositoryCase):
         self.assertNotIn("\x1b", report.stdout)
         self.assertIn("+---", report.stdout)
         self.assertIn("Unicode 中文", report.stdout)
+
+    def test_compact_json_retains_data_in_one_report_line(self):
+        self.write("file.py")
+        self.commit()
+        normal = self.payload("trace", "file.py")
+        compact = self.cli("trace", "file.py", "--json", "--compact")
+        self.assertEqual(compact.returncode, 0, compact.stderr)
+        self.assertEqual(compact.stdout.count("\n"), 1)
+        self.assertEqual(json.loads(compact.stdout), normal)
+        invalid = self.cli("trace", "file.py", "--compact")
+        self.assertEqual(invalid.returncode, 2)
+        self.assertIn("requires --json", invalid.stderr)
+
+    def test_no_clobber_exports_are_exclusive_and_preserve_existing_reports(self):
+        self.write("file.py")
+        self.commit()
+        target = self.repo / "report.json"
+        first = self.cli("trace", "file.py", "--json", "--output", str(target), "--no-clobber")
+        self.assertEqual(first.returncode, 0, first.stderr)
+        saved = target.read_text()
+        second = self.cli("trace", "file.py", "--json", "--output", str(target), "--no-clobber")
+        self.assertEqual(second.returncode, 1)
+        self.assertEqual(target.read_text(), saved)
+        self.assertEqual(list(self.repo.glob(".codegent-*")), [])
+
+    def test_replacing_an_export_preserves_regular_file_access_permissions(self):
+        import stat
+        self.write("file.py")
+        self.commit()
+        target = self.repo / "report.json"
+        target.write_text("old")
+        target.chmod(0o640)
+        result = self.cli("trace", "file.py", "--json", "--output", str(target))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertEqual(stat.S_IMODE(target.stat().st_mode), 0o640)
+        self.assertEqual(json.loads(target.read_text())["total_commits"], 1)
+
+    def test_doctor_handles_empty_clean_and_dirty_worktrees(self):
+        empty = self.payload("doctor")
+        self.assertIsNone(empty["head"])
+        self.assertTrue(empty["working_tree_clean"])
+        self.assertIn("git version", empty["git_version"])
+        self.write("file.py")
+        self.assertFalse(self.payload("doctor")["working_tree_clean"])
+        head = self.commit()
+        clean = self.payload("doctor")
+        self.assertTrue(clean["working_tree_clean"])
+        self.assertEqual(clean["head"], head)
+        self.assertIn("# codegent doctor", self.cli("doctor", "--markdown").stdout)
+
+    def test_ownership_can_ignore_listed_mechanical_revisions(self):
+        self.write("file.py", "value = 1\nother = 2\n")
+        self.commit()
+        self.write("file.py", "value=1\nother=2\n")
+        formatting = self.commit(env={"GIT_AUTHOR_NAME": "Formatter", "GIT_AUTHOR_EMAIL": "format@example.test"})
+        (self.repo / ".git/ignore-revs").write_text(formatting + "\n")
+        self.assertIn("Formatter", self.payload("owners", "file.py")["owners"][0]["author"])
+        report = self.payload("owners", "file.py", "--ignore-revs-file", ".git/ignore-revs")
+        self.assertEqual(report["owners"][0]["lines"], 2)
+        self.assertIn("First Author", report["owners"][0]["author"])
+        self.assertTrue(report["ignore_revs_file"].endswith(".git/ignore-revs"))
+
+    def test_move_aware_ownership_preserves_within_file_block_attribution(self):
+        rows = [f"original_line_{i} = 'long stable explanatory content for moved block detection'\n" for i in range(6)]
+        self.write("file.py", "".join(rows))
+        self.commit()
+        self.write("file.py", "".join(rows[3:] + rows[:3]))
+        self.commit(env={"GIT_AUTHOR_NAME": "Mover", "GIT_AUTHOR_EMAIL": "mover@example.test"})
+        ordinary = self.payload("owners", "file.py")
+        self.assertEqual(len(ordinary["owners"]), 2)
+        report = self.payload("owners", "file.py", "--detect-moves")
+        self.assertTrue(report["detect_moves"])
+        self.assertEqual(len(report["owners"]), 1)
+        self.assertEqual(report["owners"][0]["lines"], 6)
+        self.assertIn("First Author", report["owners"][0]["author"])
+
+    def test_concurrent_no_clobber_exports_have_exactly_one_winner(self):
+        self.write("file.py")
+        self.commit()
+        target = self.repo / "race.json"
+        arguments = [sys.executable, "-m", "codegent", "--repo", str(self.repo), "trace", "file.py",
+                     "--json", "--output", str(target), "--no-clobber"]
+        processes = [subprocess.Popen(arguments, cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True) for _ in range(2)]
+        outputs = [process.communicate(timeout=20) for process in processes]
+        self.assertEqual(sorted(process.returncode for process in processes), [0, 1], outputs)
+        self.assertEqual(json.loads(target.read_text())["total_commits"], 1)
+        self.assertEqual(list(self.repo.glob(".codegent-*")), [])

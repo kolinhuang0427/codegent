@@ -7,6 +7,7 @@ import json
 import os
 from pathlib import Path
 import tempfile
+import stat
 from functools import partial
 import sys
 from typing import Any, Callable
@@ -16,7 +17,7 @@ from .exports import render_markdown
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source
+from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -47,6 +48,7 @@ class ReportArgumentParser(argparse.ArgumentParser):
 def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
     common.add_argument("--version", action="version", version=f"codegent {__version__}")
+    common.add_argument("--no-clobber", action="store_true", default=argparse.SUPPRESS, help="Create an export only if its destination does not exist")
     common.add_argument("--output", default=argparse.SUPPRESS, help="Atomically write a report to a file; - means stdout")
     common.add_argument("--mailmap", action="store_true", default=argparse.SUPPRESS, help="Canonicalize history authors with .mailmap")
     common.add_argument("--ignore-whitespace", action="store_true", default=argparse.SUPPRESS, help="Ignore whitespace in textual change statistics")
@@ -64,6 +66,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     formats = common.add_mutually_exclusive_group()
     formats.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
     formats.add_argument("--markdown", action="store_true", default=argparse.SUPPRESS, help="Export a Markdown report")
+    common.add_argument("--compact", action="store_true", default=argparse.SUPPRESS, help="Emit single-line JSON reports (requires --json)")
     common.add_argument("--ascii", action="store_true", default=argparse.SUPPRESS, help="Use plain ASCII drawing characters in terminal reports")
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
     common.add_argument(
@@ -128,6 +131,8 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     owners = subparsers.add_parser("owners", parents=[common], help="Report surviving-line attribution at a commit")
     owners.add_argument("path")
+    owners.add_argument("--detect-moves", action="store_true", help="Retain attribution across within-file moved blocks")
+    owners.add_argument("--ignore-revs-file", help="Ignore listed mechanical commits when attributing lines")
     owners.add_argument("--lines", help="Inclusive START:END line range")
     owners.set_defaults(handler=_cmd_owners)
 
@@ -153,6 +158,9 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     source.add_argument("--max-bytes", type=positive_int, default=1048576)
     source.set_defaults(handler=_cmd_source)
 
+    doctor = subparsers.add_parser("doctor", parents=[common], help="Inspect Git and worktree readiness without changing files")
+    doctor.set_defaults(handler=_cmd_doctor)
+
     return parser
 
 
@@ -165,12 +173,17 @@ def main(argv: list[str] | None = None) -> int:
     _apply_defaults(args)
     if args.json_output and args.markdown:
         parser.error("choose one of --json and --markdown")
+    if args.compact and not args.json_output:
+        parser.error("--compact requires --json")
+    if args.no_clobber and args.output in (None, "-"):
+        parser.error("--no-clobber requires a file --output destination")
     invalid = {
         "diff": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
         "hotspots": {"follow"},
         "timeline": {"follow"},
         "cochange": {"follow"},
+        "doctor": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
@@ -185,12 +198,13 @@ def main(argv: list[str] | None = None) -> int:
     try:
         result = handler(args, color)
         if args.json_output:
-            output = json.dumps(result, indent=2, sort_keys=True)
+            output = json.dumps(result, indent=None if args.compact else 2,
+                                separators=(",", ":") if args.compact else None, sort_keys=True)
         elif args.markdown:
             output = render_markdown(result, args.command)
         else:
             output = ascii_graphics(result) if args.ascii else result
-        _write_output(output, args.output)
+        _write_output(output, args.output, no_clobber=args.no_clobber)
     except BrokenPipeError:
         # Redirect the descriptor so shutdown cannot flush the closed pipe again.
         with open(os.devnull, "w") as sink:
@@ -208,7 +222,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0
 
 
-def _write_output(text: str, destination: str | None) -> None:
+def _write_output(text: str, destination: str | None, *, no_clobber: bool = False) -> None:
     if not text.endswith("\n"):
         text += "\n"
     if destination in (None, "-"):
@@ -218,13 +232,23 @@ def _write_output(text: str, destination: str | None) -> None:
     target = Path(destination).expanduser()
     temporary: str | None = None
     try:
+        try:
+            target_stat = target.lstat()
+            existing_mode = target_stat.st_mode & 0o777 if stat.S_ISREG(target_stat.st_mode) else None
+        except FileNotFoundError:
+            existing_mode = None
         with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
                                          dir=target.parent, prefix=".codegent-", delete=False) as stream:
             temporary = stream.name
             stream.write(text)
             stream.flush()
+            if existing_mode is not None and not no_clobber:
+                os.fchmod(stream.fileno(), existing_mode)
             os.fsync(stream.fileno())
-        os.replace(temporary, target)
+        if no_clobber:
+            os.link(temporary, target)  # Atomic exclusive creation on the same filesystem.
+        else:
+            os.replace(temporary, target)
     except OSError as exc:
         raise GitError(f"cannot write report to {str(target)!r}: {exc.strerror or exc}") from exc
     finally:
@@ -234,7 +258,7 @@ def _write_output(text: str, destination: str | None) -> None:
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False, "ascii": False, "compact": False, "no_clobber": False,
         "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
@@ -320,7 +344,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).owners(args.path, args.ref, lines=args.lines)
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves)
     return report if args.json_output or args.markdown else render_owners(report)
 
 
@@ -346,6 +370,11 @@ def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 def _cmd_source(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes)
     return report if args.json_output or args.markdown else render_source(report)
+
+
+def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).doctor()
+    return report if args.json_output or args.markdown else render_doctor(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

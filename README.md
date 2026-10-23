@@ -185,7 +185,7 @@ Owners reports disclose shallow-clone blame boundaries and support
 cannot inject formatting into structured history parsing.
 
 CI exercises the real-repository suite on Linux and macOS with Python 3.10 and
-3.12, then builds a wheel and runs all eight installed commands in text, JSON,
+3.12, then builds a wheel and runs all thirteen installed commands in text, JSON,
 and Markdown outside the checkout. To repeat the installed-package check locally:
 
 ```bash
@@ -262,3 +262,25 @@ unchanged; JSON records the selected `order`.
 `--ascii` replaces terminal drawing glyphs with plain ASCII and disables color.
 Unicode filenames and messages remain intact; use a UTF-8 terminal or file export
 for non-ASCII repository content.
+
+`--json --compact` emits each complete report on one line, with the same
+structured data as indented JSON. It works with stdout and atomic file exports.
+
+`--output report.json --json --no-clobber` atomically creates a new export
+without replacing an existing destination, including during concurrent writes.
+A file destination is required; temporary export files are cleaned up on failure.
+
+Replacing an existing regular report file preserves its access permission bits.
+New reports use restrictive temporary-file permissions; special mode bits are not copied.
+
+`doctor --json` reports Git/Python/package versions, committed HEAD, shallow
+state, object format, and worktree cleanliness without changing files. Empty
+worktrees are supported. Diagnostics do not expose remote URLs or credentials.
+
+`owners FILE --ignore-revs-file .git-blame-ignore-revs` asks Git blame to ignore
+listed mechanical commits. Relative file paths resolve from `--repo`; the selected
+file and whitespace mode are recorded in JSON. Reattribution follows Git heuristics.
+
+`owners --detect-moves` enables Git blame within-file block-move detection
+(`-M`). JSON records the mode; this remains heuristic attribution, not proof of
+semantic authorship. It combines with whitespace and ignored-revision options.
