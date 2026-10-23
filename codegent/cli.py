@@ -195,6 +195,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     refs.add_argument("--kind", choices=("all", "branch", "tag", "remote"), default="all")
     refs.add_argument("--limit", type=positive_int, default=1000)
     refs.add_argument("--contains", help="Only refs whose commit history contains this revision")
+    refs.add_argument("--points-at", help="Only refs pointing at this commit, including annotated tags")
     refs.set_defaults(handler=_cmd_refs)
 
     commits = subparsers.add_parser("commits", parents=[common], help="List commits reachable from TARGET but not BASE")
@@ -440,7 +441,7 @@ def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).refs(kind=args.kind, limit=args.limit, contains=args.contains)
+    report = _tracer(args).refs(kind=args.kind, limit=args.limit, contains=args.contains, points_at=args.points_at)
     return report if args.json_output or args.markdown or args.csv_output else render_refs(report)
 
 

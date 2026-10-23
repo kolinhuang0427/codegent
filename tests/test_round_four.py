@@ -115,3 +115,16 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual({r["short_name"] for r in report["refs"]}, {"main", "release"})
         self.assertEqual(report["contains_resolved"], new)
         self.assertEqual(self.cli("refs", "--contains", "missing").returncode, 1)
+
+    def test_refs_can_identify_exact_commit_labels(self):
+        self.write("a")
+        old = self.commit()
+        self.git("tag", "older")
+        self.write("a", "updated\n")
+        tip = self.commit()
+        self.git("tag", "-a", "annotated", "-m", "release")
+        self.git("tag", "lightweight")
+        report = self.payload("refs", "--points-at", "HEAD", "--contains", old)
+        self.assertEqual({r["short_name"] for r in report["refs"]}, {"main", "annotated", "lightweight"})
+        self.assertEqual(report["points_at_resolved"], tip)
+        self.assertEqual(self.payload("refs", "--points-at", old)["total_refs"], 1)

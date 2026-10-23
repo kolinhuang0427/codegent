@@ -354,3 +354,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `commits BASE TARGET --ancestry-path` keeps only commits descending from BASE and reachable from TARGET, excluding side history that forked before BASE. Merge-selection flags remain exclusive even when placed on opposite sides of the command name.
 
 `refs --contains COMMIT` finds local branches, tags, and remote-tracking refs whose commit history contains the resolved revision. Both requested and resolved containment refs are recorded.
+
+`refs --points-at COMMIT` selects labels at the exact resolved commit, including annotated tags. It can be combined with `--contains` and kind filters; it does not fetch remote refs.
