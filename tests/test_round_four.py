@@ -197,3 +197,18 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual([r["number"] for r in report["lines"]], [1, 2, 3, 4])
         self.assertEqual(self.payload("source", "a", "--lines", "5:5", "--context", "20")["content"], "one\ntwo\nthree\nfour\nfive")
         self.assertEqual(self.cli("source", "a", "--context", "1").returncode, 1)
+
+    def test_patch_can_preview_target_changes_since_merge_base(self):
+        self.write("root")
+        shared = self.commit()
+        self.write("main")
+        self.commit()
+        self.git("checkout", "-b", "side", shared)
+        self.write("side")
+        self.commit()
+        report = self.payload("patch", "main", "side", "--merge-base")
+        self.assertEqual(report["resolved_a"], shared)
+        self.assertNotEqual(report["input_a_resolved"], shared)
+        self.assertIn("b/side", report["patch"])
+        self.assertNotIn("b/main", report["patch"])
+        self.assertTrue(report["merge_base"])
