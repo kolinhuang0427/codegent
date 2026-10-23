@@ -162,7 +162,7 @@ class GitTracer:
             raise GitRepositoryError(f"not a git repository: {self.repo}") from exc
         if inside != "true":
             raise GitRepositoryError(f"not a git repository: {self.repo}")
-        self.repo = self.git(["rev-parse", "--show-toplevel"]).removesuffix("\n")
+        self.repo = os.path.normpath(self.git(["rev-parse", "--show-toplevel"]).removesuffix("\n"))
 
     def has_commits(self) -> bool:
         self.ensure_repository()
@@ -173,17 +173,32 @@ class GitTracer:
         return self.repo
 
     def normalize_path(self, path: str) -> str:
+        if not isinstance(path, str) or not path:
+            raise GitError("path must be a nonempty string; use '.' for the repository")
         self.ensure_repository()
         absolute = os.path.abspath(os.path.join(self.path_base, path))
-        if os.path.commonpath([self.repo, absolute]) != self.repo:
-            # Resolve aliases of the repository root, not tracked symlink parents.
-            ancestor = absolute
-            while os.path.realpath(ancestor) != self.repo:
+
+        def inside(candidate: str) -> bool:
+            try:
+                return os.path.normcase(os.path.commonpath([self.repo, candidate])) == os.path.normcase(self.repo)
+            except ValueError:  # Different Windows drives have no common path.
+                return False
+
+        if not inside(absolute):
+            # Map external aliases, preserving tracked symlink components below
+            # the outermost alias into the repository or one of its subtrees.
+            ancestor, alias = absolute, None
+            while True:
+                resolved = os.path.realpath(ancestor)
+                if inside(resolved):
+                    alias = ancestor, resolved
                 parent = os.path.dirname(ancestor)
                 if parent == ancestor:
-                    raise GitError(f"path is outside the repository: {path!r}")
+                    break
                 ancestor = parent
-            absolute = os.path.join(self.repo, os.path.relpath(absolute, ancestor))
+            if alias is None:
+                raise GitError(f"path is outside the repository: {path!r}")
+            absolute = os.path.join(alias[1], os.path.relpath(absolute, alias[0]))
         return os.path.relpath(absolute, self.repo).replace(os.sep, "/")
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
@@ -372,7 +387,7 @@ class GitTracer:
                 "python_version": sys.version.split()[0], "head": head,
                 "shallow": self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true",
                 "object_format": self.git(["rev-parse", "--show-object-format"]).strip(),
-                "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "-z"])),
+                "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "--untracked-files=all", "-z"])),
                 "timeout_seconds": self.timeout}
 
     def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int | None = 1000, sort: str = "path", kind: str = "all", min_bytes: int | None = None, max_bytes: int | None = None, includes: list[str] | None = None, excludes: list[str] | None = None) -> dict[str, Any]:

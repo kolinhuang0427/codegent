@@ -27,7 +27,6 @@ class CommitNode:
     author_email: str
     date: str
     message: str
-    committer_date: str = ""
     additions: int = 0
     deletions: int = 0
     files: list[str] = field(default_factory=list)
@@ -36,6 +35,7 @@ class CommitNode:
     renamed_from: str | None = None
     renamed_to: str | None = None
     role: str = "descendant"
+    committer_date: str = ""
 
     @property
     def short_hash(self) -> str:
@@ -110,8 +110,6 @@ class Bloodline:
     commits: list[CommitNode]
     repo: str
     requested_ref: str = "HEAD"
-    resolved_ref: str = ""
-    newest_first: bool = False
     followed_renames: bool = True
     max_commits: int | None = None
     truncated: bool = False
@@ -119,6 +117,8 @@ class Bloodline:
     mailmap: bool = False
     rename_threshold: int = 50
     selection: dict[str, Any] = field(default_factory=dict)
+    resolved_ref: str = ""
+    newest_first: bool = False
 
     @property
     def display_commits(self) -> list[CommitNode]:

@@ -17,6 +17,7 @@ from .support import RepositoryCase, ROOT
 class RoundThreeTests(RepositoryCase):
     pass
 
+    @unittest.skipIf(os.name == "nt", "Windows directory names cannot contain newlines")
     def test_repository_root_with_a_trailing_newline_is_preserved(self):
         child = self.repo / "work\n"
         child.mkdir()
