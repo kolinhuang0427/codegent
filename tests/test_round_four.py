@@ -258,3 +258,23 @@ class RoundFourTests(RepositoryCase):
         for flag in ("--csv", "--markdown", "--no-color"):
             self.assertEqual(self.cli("inventory", flag).returncode, 0)
         self.assertEqual(self.cli("inventory", "--author", "First").returncode, 2)
+
+    def test_divergence_reports_unique_shared_and_ancestral_histories(self):
+        self.write("root")
+        shared = self.commit()
+        self.write("main")
+        self.commit()
+        self.git("checkout", "-b", "side", shared)
+        self.write("side")
+        self.commit()
+        report = self.payload("divergence", "main", "side")
+        self.assertEqual(report["relationship"], "diverged")
+        self.assertEqual(report["shared_commits"], 1)
+        self.assertEqual([r["unique_commits"] for r in report["sides"]], [1, 1])
+        self.assertEqual(report["merge_bases"], [shared])
+        self.assertEqual(self.payload("divergence", shared, "side")["relationship"], "base-ancestor")
+        self.assertEqual(self.payload("divergence", "side", shared)["relationship"], "target-ancestor")
+        self.assertEqual(self.payload("divergence", "HEAD", "HEAD")["relationship"], "equal")
+        for flag in ("--csv", "--markdown", "--no-color"):
+            self.assertEqual(self.cli("divergence", "main", "side", flag).returncode, 0)
+        self.assertEqual(self.cli("divergence", "main", "side", "--max-commits", "1").returncode, 2)

@@ -17,7 +17,7 @@ from .exports import render_markdown, render_csv
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import inventory_report, render_inventory, directory_report, render_directories, author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
+from .reports import render_divergence, inventory_report, render_inventory, directory_report, render_directories, author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -237,6 +237,11 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     inventory.add_argument("--sort", choices=("bytes", "entries", "name"), default="bytes")
     inventory.set_defaults(handler=_cmd_inventory)
 
+    divergence = subparsers.add_parser("divergence", parents=[common], help="Compare reachable histories of two revisions")
+    divergence.add_argument("base")
+    divergence.add_argument("target")
+    divergence.set_defaults(handler=_cmd_divergence)
+
     return parser
 
 
@@ -267,6 +272,7 @@ def main(argv: list[str] | None = None) -> int:
         "refs": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "doctor": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
+        "divergence": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "inventory": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
@@ -498,3 +504,8 @@ def _cmd_inventory(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
     snapshot = _tracer(args).tracked_files(args.path, args.ref, limit=None)
     report = inventory_report(snapshot, group_by=args.group_by, depth=args.depth, sort=args.sort, limit=args.limit)
     return report if args.json_output or args.markdown or args.csv_output else render_inventory(report)
+
+
+def _cmd_divergence(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = _tracer(args).divergence(args.base, args.target)
+    return report if args.json_output or args.markdown or args.csv_output else render_divergence(report)

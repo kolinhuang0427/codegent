@@ -327,3 +327,11 @@ def render_inventory(report: dict[str, Any]) -> str:
     lines.append(f"Showing {len(report['groups'])} of {report['total_groups']} groups")
     lines.append(report["interpretation"])
     return "\n".join(lines) + "\n"
+
+
+@safe_display
+def render_divergence(report: dict[str, Any]) -> str:
+    lines = [f"Revision relationship: {report['relationship']}", f"Shared commits: {report['shared_commits']}", "Side  Unique commits  Ref"]
+    lines.extend(f"{r['side']}  {r['unique_commits']}  {r['ref']} ({r['resolved_ref'][:12]})" for r in report["sides"])
+    lines.extend(f"Warning: {w}" for w in report["warnings"])
+    return "\n".join(lines) + "\n"
