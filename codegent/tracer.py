@@ -324,14 +324,16 @@ class GitTracer:
             mailmap=self.mailmap,
         )
 
-    def refs(self, *, kind: str = "all", limit: int = 1000) -> dict[str, Any]:
+    def refs(self, *, kind: str = "all", limit: int = 1000, contains: str | None = None) -> dict[str, Any]:
         positive_count(limit, "limit")
         scopes = {"branch": ["refs/heads"], "tag": ["refs/tags"], "remote": ["refs/remotes"],
                   "all": ["refs/heads", "refs/tags", "refs/remotes"]}
         if kind not in scopes:
             raise GitError("ref kind must be branch, tag, remote, or all")
         self.ensure_repository()
-        output = self.git(["for-each-ref", "--sort=refname",
+        contains_resolved = self.resolve_ref(contains) if contains is not None else None
+        filters = [f"--contains={contains_resolved}"] if contains_resolved else []
+        output = self.git(["for-each-ref", *filters, "--sort=refname",
                            "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)", *scopes[kind]])
         rows = []
         try:
@@ -346,7 +348,7 @@ class GitTracer:
                              "peeled_object_id": peeled or None, "peeled_type": peeled_type or None})
         except (ValueError, KeyError, IndexError) as exc:
             raise GitError("cannot parse Git reference metadata") from exc
-        return {"repo": self.repo, "kind": kind, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
+        return {"repo": self.repo, "kind": kind, "contains": contains, "contains_resolved": contains_resolved, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
 
     def doctor(self) -> dict[str, Any]:
         git_version = self.git(["--version"]).strip()

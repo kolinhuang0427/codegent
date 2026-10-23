@@ -103,3 +103,15 @@ class RoundFourTests(RepositoryCase):
         self.assertNotIn(side, {r["hash"] for r in filtered["commits"]})
         self.assertEqual(filtered["total_commits"], 1)
         self.assertTrue(filtered["selection"]["ancestry_path"])
+
+    def test_refs_can_find_releases_and_branches_containing_a_commit(self):
+        self.write("a")
+        old = self.commit()
+        self.git("branch", "old", old)
+        self.write("a", "new\n")
+        new = self.commit()
+        self.git("tag", "-a", "release", "-m", "release")
+        report = self.payload("refs", "--contains", new)
+        self.assertEqual({r["short_name"] for r in report["refs"]}, {"main", "release"})
+        self.assertEqual(report["contains_resolved"], new)
+        self.assertEqual(self.cli("refs", "--contains", "missing").returncode, 1)
