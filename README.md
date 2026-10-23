@@ -194,3 +194,18 @@ python -m venv /tmp/codegent-check
 /tmp/codegent-check/bin/python -m pip install --no-deps dist/*.whl
 python scripts/smoke_installed.py /tmp/codegent-check/bin/codegent
 ```
+
+Repository selection ignores inherited `GIT_DIR`, `GIT_WORK_TREE`, `GIT_INDEX_FILE`,
+`GIT_COMMON_DIR`, and `GIT_PREFIX` overrides so `--repo` remains authoritative.
+
+File lineage commands reject directory tips; use `hotspots DIRECTORY` for
+repository activity rather than combining several files into a single lineage.
+
+History reports record both the requested ref and its immutable `resolved_ref`
+commit ID, making saved results auditable after branches or tags move.
+
+Diff reports, including `--summary`, preserve `resolved_a`, `resolved_b`, and
+whitespace/rename settings alongside the requested comparison refs.
+
+Net carried-line estimates and origin age are `null` when the necessary complete
+baseline is unavailable. Binary transitions also make cumulative line estimates unknown.

@@ -17,7 +17,7 @@ def _table(headers: list[str], rows: list[list[Any]]) -> list[str]:
 
 def render_markdown(report: dict[str, Any], command: str) -> str:
     lines = [f"# codegent {command}", ""]
-    for label, key in (("Repository", "repo"), ("Path", "path"), ("Ref", "requested_ref"),
+    for label, key in (("Repository", "repo"), ("Path", "path"), ("Ref", "requested_ref"), ("Resolved tip", "resolved_ref"),
                        ("Base", "commit_a"), ("Target", "commit_b")):
         if key in report:
             lines.append(f"**{label}:** {_cell(report[key])}")

@@ -29,14 +29,21 @@ class PathNotFoundError(GitError):
     """Raised when a traced path has no history."""
 
 
+def positive_count(value: int | None, name: str, *, allow_none: bool = False) -> None:
+    if value is None and allow_none:
+        return
+    if type(value) is not int or value <= 0:
+        raise GitError(f"{name} must be a positive integer" + (" or None" if allow_none else ""))
+
+
 def iso_date(value: str) -> str:
     try:
         parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
-    except ValueError as exc:
+        if parsed.tzinfo is None:
+            parsed = parsed.replace(tzinfo=timezone.utc)
+        return parsed.astimezone(timezone.utc).isoformat()
+    except (ValueError, OverflowError) as exc:
         raise GitError(f"invalid ISO date: {value!r}") from exc
-    if parsed.tzinfo is None:
-        parsed = parsed.replace(tzinfo=timezone.utc)
-    return parsed.astimezone(timezone.utc).isoformat()
 
 
 @dataclass(slots=True)
@@ -48,6 +55,9 @@ class DiffLineage:
     stat: str
     paths: list[str] = field(default_factory=list)
     rename_threshold: int = 50
+    resolved_a: str = ""
+    resolved_b: str = ""
+    ignore_whitespace: bool = False
 
     @property
     def summary(self) -> dict[str, Any]:
@@ -64,6 +74,9 @@ class DiffLineage:
             "repo": self.repo,
             "commit_a": self.commit_a,
             "commit_b": self.commit_b,
+            "resolved_a": self.resolved_a,
+            "resolved_b": self.resolved_b,
+            "ignore_whitespace": self.ignore_whitespace,
             "files": self.files,
             "stat": self.stat,
             "summary": self.summary,
@@ -76,9 +89,9 @@ class GitTracer:
     """Trace file history through git using subprocess calls."""
 
     def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0, ignore_whitespace: bool = False, mailmap: bool = False) -> None:
-        if not 1 <= rename_threshold <= 100:
+        if type(rename_threshold) is not int or not 1 <= rename_threshold <= 100:
             raise GitError("rename threshold must be between 1 and 100")
-        if not math.isfinite(timeout) or timeout <= 0:
+        if isinstance(timeout, bool) or not isinstance(timeout, (int, float)) or not math.isfinite(timeout) or timeout <= 0:
             raise GitError("timeout must be a positive finite number")
         self.mailmap = mailmap
         self.ignore_whitespace = ignore_whitespace
@@ -94,6 +107,9 @@ class GitTracer:
             args = [arg.replace("%an", "%aN").replace("%ae", "%aE") if arg.startswith("--format=") else arg for arg in args]
         cmd = ["git", "-c", "color.ui=false", "-c", "log.showSignature=false",
                "-c", "i18n.logOutputEncoding=UTF-8", "--literal-pathspecs", "-C", self.repo, *args]
+        environment = dict(os.environ)
+        for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX"):
+            environment.pop(key, None)
         try:
             result = subprocess.run(
                 cmd,
@@ -102,6 +118,7 @@ class GitTracer:
                 stderr=subprocess.PIPE,
                 text=False,
                 timeout=self.timeout,
+                env=environment,
             )
         except subprocess.TimeoutExpired as exc:
             raise GitExecutionError(f"git timed out after {self.timeout:g} seconds") from exc
@@ -136,9 +153,15 @@ class GitTracer:
     def normalize_path(self, path: str) -> str:
         self.ensure_repository()
         absolute = os.path.abspath(os.path.join(self.path_base, path))
-        absolute = os.path.join(os.path.realpath(os.path.dirname(absolute)), os.path.basename(absolute))
         if os.path.commonpath([self.repo, absolute]) != self.repo:
-            raise GitError(f"path is outside the repository: {path!r}")
+            # Resolve aliases of the repository root, not tracked symlink parents.
+            ancestor = absolute
+            while os.path.realpath(ancestor) != self.repo:
+                parent = os.path.dirname(ancestor)
+                if parent == ancestor:
+                    raise GitError(f"path is outside the repository: {path!r}")
+                ancestor = parent
+            absolute = os.path.join(self.repo, os.path.relpath(absolute, ancestor))
         return os.path.relpath(absolute, self.repo).replace(os.sep, "/")
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
@@ -179,13 +202,15 @@ class GitTracer:
         allow_empty: bool = False,
         first_parent: bool = False,
     ) -> Bloodline:
-        if max_commits is not None and max_commits <= 0:
-            raise GitError("max_commits must be greater than zero or None")
+        positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
 
         path = self.normalize_path(path)
+        resolved = self.resolve_ref(ref)
+        if follow is not None and self.git(["cat-file", "-t", f"{resolved}:{path}"], check=False).strip() == "tree":
+            raise GitError("path is a directory; use hotspots for directory activity")
 
         selection: dict[str, Any] = {}
         if since:
@@ -201,6 +226,7 @@ class GitTracer:
             "-z",
             "--no-ext-diff",
             "--no-textconv",
+            "--no-notes",
             "--numstat",
             f"--find-renames={self.rename_threshold}%",
         ]
@@ -222,7 +248,7 @@ class GitTracer:
             args.append(f"--until={selection['until']}")
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits + 1}")
-        args.extend([self.resolve_ref(ref), "--", path])
+        args.extend([resolved, "--", path])
 
         output = self.git(args)
         newest_first = self._parse_log(output)
@@ -242,6 +268,7 @@ class GitTracer:
             commits=commits,
             repo=self.root(),
             requested_ref=ref,
+            resolved_ref=resolved,
             followed_renames=bool(follow),
             max_commits=max_commits,
             truncated=truncated,
@@ -313,6 +340,9 @@ class GitTracer:
             repo=self.root(),
             commit_a=commit_a,
             commit_b=commit_b,
+            resolved_a=base,
+            resolved_b=target,
+            ignore_whitespace=self.ignore_whitespace,
             files=files,
             stat=stat.rstrip(),
             paths=selected_paths,
@@ -335,6 +365,12 @@ class GitTracer:
         return item, index
 
     def _parse_log(self, output: str) -> list[CommitNode]:
+        try:
+            return self._decode_log(output)
+        except (IndexError, ValueError, KeyError) as exc:
+            raise GitError("cannot parse Git history output") from exc
+
+    def _decode_log(self, output: str) -> list[CommitNode]:
         # NUL delimiters preserve whitespace, Unicode and control characters in paths.
         tokens = output.split("\0")
         commits: list[CommitNode] = []
@@ -381,6 +417,12 @@ class GitTracer:
                 commit.role = "descendant"
 
     def _merge_diff_outputs(self, numstat: str, name_status: str) -> list[dict[str, Any]]:
+        try:
+            return self._decode_diff(numstat, name_status)
+        except (IndexError, ValueError, KeyError) as exc:
+            raise GitError("cannot parse Git comparison output") from exc
+
+    def _decode_diff(self, numstat: str, name_status: str) -> list[dict[str, Any]]:
         stats_by_path: dict[str, dict[str, Any]] = {}
         tokens = numstat.split("\0")
         index = 0
