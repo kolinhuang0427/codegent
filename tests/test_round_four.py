@@ -142,3 +142,19 @@ class RoundFourTests(RepositoryCase):
         newest = self.payload("refs", "--kind", "tag", "--sort", "date", "--limit", "1")
         self.assertEqual(newest["refs"][0]["short_name"], "v3")
         self.assertTrue(newest["truncated"])
+
+    def test_ref_patterns_filter_before_limits_and_export_peeled_type(self):
+        self.write("a")
+        self.commit()
+        for tag in ("release/v1", "release/v2", "other"):
+            self.git("tag", "-a", tag, "-m", tag)
+        report = self.payload("refs", "--kind", "tag", "--match", "release/*", "--limit", "1")
+        self.assertEqual(report["total_refs"], 2)
+        self.assertEqual(report["scanned_refs"], 3)
+        self.assertTrue(report["truncated"])
+        both = self.payload("refs", "--kind", "tag", "--match", "release/v1", "--match", "other")
+        self.assertEqual(both["total_refs"], 2)
+        result = self.cli("refs", "--kind", "tag", "--csv")
+        row = list(csv.DictReader(io.StringIO(result.stdout)))[0]
+        self.assertEqual(row["peeled_type"], "commit")
+        self.assertNotIn("peeled_object_type", row)
