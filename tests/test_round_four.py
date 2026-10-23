@@ -278,3 +278,56 @@ class RoundFourTests(RepositoryCase):
         for flag in ("--csv", "--markdown", "--no-color"):
             self.assertEqual(self.cli("divergence", "main", "side", flag).returncode, 0)
         self.assertEqual(self.cli("divergence", "main", "side", "--max-commits", "1").returncode, 2)
+
+    def test_ownership_ranking_keeps_full_denominator_when_limited(self):
+        self.write("a", "one\ntwo\n")
+        self.commit()
+        self.write("a", "one\ntwo\nthree\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "AAA", "GIT_AUTHOR_EMAIL": "a@example.test"})
+        report = self.payload("owners", "a", "--sort", "author", "--limit", "1")
+        self.assertEqual(report["total_groups"], 2)
+        self.assertEqual(report["displayed_groups"], 1)
+        self.assertEqual(report["owners"][0]["percentage"], 33.33)
+        self.assertEqual(report["omitted_lines"], 2)
+        self.assertEqual(report["selected_lines"], 3)
+        self.assertEqual(self.payload("owners", "a", "--limit", "1")["owners"][0]["lines"], 2)
+        md = self.cli("owners", "a", "--limit", "1", "--markdown")
+        self.assertIn("omitted lines: 1", md.stdout)
+
+    def test_ownership_reports_final_line_ranges_for_selected_groups(self):
+        self.write("a", "first\nsecond\nthird\nfourth\n")
+        self.commit()
+        self.write("a", "first\nchanged second\nthird\nchanged fourth\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        report = self.payload("owners", "a", "--show-lines", "--lines", "2:4")
+        first = next(r for r in report["owners"] if r["author"].startswith("First"))
+        second = next(r for r in report["owners"] if r["author"].startswith("Second"))
+        self.assertEqual(first["line_ranges"], [[3, 3]])
+        self.assertEqual(second["line_ranges"], [[2, 2], [4, 4]])
+        self.assertNotIn("line_ranges", self.payload("owners", "a")["owners"][0])
+        self.assertEqual(self.cli("owners", "a", "--show-lines", "--markdown").returncode, 0)
+
+    def test_weekly_timeline_uses_utc_mondays_across_year_boundary(self):
+        self.write("a")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-12-31T00:00:00Z"})
+        self.write("a", "new\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2025-01-14T00:00:00Z"})
+        report = self.payload("timeline", "--period", "week", "--fill-gaps")
+        self.assertEqual([r["period"] for r in report["periods"]], ["2024-12-30", "2025-01-06", "2025-01-13"])
+        self.assertEqual([r["commits"] for r in report["periods"]], [1, 0, 1])
+        self.assertEqual(report["week_start"], "monday")
+        self.assertEqual(self.cli("timeline", "--period", "week", "--fill-gaps", "--max-periods", "2").returncode, 1)
+
+    def test_cumulative_timeline_totals_follow_selected_periods(self):
+        self.write("a", "first\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-01-01T00:00:00Z"})
+        self.write("a", "first\nsecond\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-03-01T00:00:00Z"})
+        report = self.payload("timeline", "--fill-gaps", "--cumulative")
+        self.assertEqual([r["cumulative_commits"] for r in report["periods"]], [1, 1, 2])
+        self.assertEqual([r["cumulative_additions"] for r in report["periods"]], [1, 1, 2])
+        self.assertEqual([r["commits"] for r in report["periods"]], [1, 0, 1])
+        selected = self.payload("timeline", "--cumulative", "--max-commits", "1")
+        self.assertEqual(selected["periods"][0]["cumulative_additions"], 1)
+        for flag in ("--markdown", "--no-color", "--csv"):
+            self.assertEqual(self.cli("timeline", "--cumulative", flag).returncode, 0)

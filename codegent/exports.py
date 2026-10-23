@@ -52,9 +52,11 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", f"Showing {len(report['directories'])} of {report['total_directories']} directories.", _cell(report["path_policy"])]
     elif command == "owners":
         keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])
-        lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []), [
+        if report.get("show_lines"):
+            keys.append("line_ranges")
+        lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []) + (["Line ranges"] if "line_ranges" in keys else []), [
             [row[key] for key in keys] for row in report["owners"]])
-        lines += ["", _cell(report["attribution"])]
+        lines += ["", f"Showing {report['displayed_groups']} of {report['total_groups']} groups; omitted lines: {report['omitted_lines']}.", _cell(report["attribution"])]
     elif command == "patch":
         preview = "\n".join(escape_text(line) for line in report["patch"].split("\n"))
         longest = max((len(match.group()) for match in re.finditer(r"`+", preview)), default=0)
@@ -78,9 +80,14 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", f"Target commits: {report['target_commits']}; showing {len(report['files'])} "
                   f"of {report['matching_files']} matching paths.", _cell(report["interpretation"])]
     elif command == "timeline":
-        lines += _table(["Period", "Commits", "Authors", "Files", "+", "-"], [
-            [row[key] for key in ("period", "commits", "authors", "files", "additions", "deletions")]
-            for row in report["periods"]])
+        keys = ["period", "commits", "authors", "files", "additions", "deletions"]
+        headers = ["Period", "Commits", "Authors", "Files", "+", "-"]
+        if report["cumulative"]:
+            keys += ["cumulative_commits", "cumulative_additions", "cumulative_deletions"]
+            headers += ["Total commits", "Total +", "Total -"]
+        lines += _table(headers, [[row[key] for key in keys] for row in report["periods"]])
+        if report["cumulative"]:
+            lines += ["", _cell(report["cumulative_scope"])]
         lines += ["", _cell(report["date_basis"])]
     elif command == "diff":
         summary = report["summary"]

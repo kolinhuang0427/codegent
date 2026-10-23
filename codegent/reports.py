@@ -101,16 +101,19 @@ def render_hotspots(report: dict[str, Any]) -> str:
 def render_owners(report: dict[str, Any]) -> str:
     lines = [f"Line ownership: {report['path']} ({report['selected_lines']} lines)", "Lines  Percent  Author"]
     lines.extend(f"{row['lines']:5}  {row['percentage']:6.2f}%  {row['author']}" + (f"  {row['commit']}" if "commit" in row else "") for row in report["owners"])
+    if report.get("show_lines"):
+        lines.extend(f"{row['author']} ranges: {row['line_ranges']}" for row in report["owners"])
     lines.extend(f"Warning: {warning}" for warning in report.get("warnings", []))
+    lines.append(f"Showing {report['displayed_groups']} of {report['total_groups']} groups; omitted lines: {report['omitted_lines']}")
     lines.append(report["attribution"])
     return "\n".join(lines) + "\n"
 
 
-def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author", fill_gaps: bool = False, max_periods: int = 1000) -> dict[str, Any]:
+def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author", fill_gaps: bool = False, max_periods: int = 1000, cumulative: bool = False) -> dict[str, Any]:
     positive_count(max_periods, "max_periods")
-    widths = {"day": 10, "month": 7, "year": 4}
+    widths = {"day": 10, "week": 10, "month": 7, "year": 4}
     if period not in widths:
-        raise GitError("timeline period must be day, month, or year")
+        raise GitError("timeline period must be day, week, month, or year")
     if date_basis not in {"author", "committer"}:
         raise GitError("timeline date basis must be author or committer")
     buckets: dict[str, dict[str, Any]] = {}
@@ -118,7 +121,9 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
         date = commit.date if date_basis == "author" else commit.committer_date
         if not date:
             raise GitError("requested timeline dates are unavailable in supplied history")
-        key = iso_date(date)[:widths[period]]
+        normalized = iso_date(date)
+        day = calendar_date.fromisoformat(normalized[:10])
+        key = (day - timedelta(days=day.weekday())).isoformat() if period == "week" else normalized[:widths[period]]
         row = buckets.setdefault(key, {"period": key, "commits": 0, "authors": set(), "files": set(),
                                        "additions": 0, "deletions": 0, "binary_changes": 0})
         row["commits"] += 1
@@ -129,7 +134,7 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
         row["binary_changes"] += sum(int(item["binary"]) for item in commit.changes)
     if fill_gaps and buckets:
         first, last = min(buckets), max(buckets)
-        current = calendar_date.fromisoformat(first + {"day": "", "month": "-01", "year": "-01-01"}[period])
+        current = calendar_date.fromisoformat(first + {"day": "", "week": "", "month": "-01", "year": "-01-01"}[period])
         while True:
             key = current.isoformat()[:widths[period]]
             if key > last:
@@ -140,8 +145,8 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
                 raise GitError("timeline exceeds --max-periods; increase the budget or narrow history")
             if key == last:
                 break
-            if period == "day":
-                current += timedelta(days=1)
+            if period in {"day", "week"}:
+                current += timedelta(days=7 if period == "week" else 1)
             elif period == "month":
                 current = calendar_date(current.year + (current.month == 12), current.month % 12 + 1, 1)
             else:
@@ -149,19 +154,25 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
     if len(buckets) > max_periods:
         raise GitError("timeline exceeds --max-periods; increase the budget or narrow history")
     rows = [buckets[key] for key in sorted(buckets)]
+    running = {"commits": 0, "additions": 0, "deletions": 0, "binary_changes": 0}
     for row in rows:
+        if cumulative:
+            for key in running:
+                running[key] += row[key]
+                row["cumulative_" + key] = running[key]
         row["authors"] = len(row["authors"])
         row["files"] = len(row["files"])
     return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
             "selection": history.selection, "warnings": history.warnings, "period": period,
-            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "fill_gaps": fill_gaps, "max_periods": max_periods, "periods": rows}
+            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "week_start": "monday" if period == "week" else None, "fill_gaps": fill_gaps, "max_periods": max_periods, "cumulative": cumulative,
+            "cumulative_scope": "selected commits in displayed period order; diff counts, not surviving lines", "periods": rows}
 
 
 @safe_display
 def render_timeline(report: dict[str, Any]) -> str:
-    lines = [f"Activity timeline: {report['path']} ({report['date_basis']})", "Period  Commits  Authors  Files  +Lines  -Lines"]
-    lines.extend(f"{row['period']}  {row['commits']:7}  {row['authors']:7}  {row['files']:5}  {row['additions']:6}  {row['deletions']:6}" for row in report["periods"])
+    lines = [f"Activity timeline: {report['path']} ({report['date_basis']})", "Period  Commits  Authors  Files  +Lines  -Lines" + ("  Total commits  Total+  Total-" if report["cumulative"] else "")]
+    lines.extend(f"{row['period']}  {row['commits']:7}  {row['authors']:7}  {row['files']:5}  {row['additions']:6}  {row['deletions']:6}" + (f"  {row['cumulative_commits']}  {row['cumulative_additions']}  {row['cumulative_deletions']}" if report["cumulative"] else "") for row in report["periods"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
 

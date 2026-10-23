@@ -159,14 +159,18 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     owners.add_argument("--ignore-revs-file", help="Ignore listed mechanical commits when attributing lines")
     owners.add_argument("--lines", help="Inclusive START:END line range")
     owners.add_argument("--group-by", choices=("author", "commit"), default="author")
+    owners.add_argument("--sort", choices=("lines", "author"), default="lines")
+    owners.add_argument("--limit", type=positive_int, help="Maximum attribution groups; percentages keep the full line denominator")
+    owners.add_argument("--show-lines", action="store_true", help="Include inclusive final-file line ranges for each group")
     owners.set_defaults(handler=_cmd_owners)
 
     timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author or committer date periods")
     timeline.add_argument("path", nargs="?", default=".")
     timeline.add_argument("--date-basis", choices=("author", "committer"), default="author")
-    timeline.add_argument("--period", choices=("day", "month", "year"), default="month")
+    timeline.add_argument("--period", choices=("day", "week", "month", "year"), default="month")
     timeline.add_argument("--fill-gaps", action="store_true", help="Include empty periods between observed dates")
     timeline.add_argument("--max-periods", type=positive_int, default=1000)
+    timeline.add_argument("--cumulative", action="store_true", help="Include running totals within selected history")
     timeline.set_defaults(handler=_cmd_timeline)
 
     cochange = subparsers.add_parser("cochange", parents=[common], help="Find files changed in the same commits as a target")
@@ -439,13 +443,13 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, detect_copies=args.detect_copies, group_by=args.group_by, max_bytes=args.max_bytes)
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, detect_copies=args.detect_copies, group_by=args.group_by, max_bytes=args.max_bytes, sort=args.sort, limit=args.limit, show_lines=args.show_lines)
     return report if args.json_output or args.markdown or args.csv_output else render_owners(report)
 
 
 def _cmd_timeline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
-    report = timeline_report(history, period=args.period, date_basis=args.date_basis, fill_gaps=args.fill_gaps, max_periods=args.max_periods)
+    report = timeline_report(history, period=args.period, date_basis=args.date_basis, fill_gaps=args.fill_gaps, max_periods=args.max_periods, cumulative=args.cumulative)
     return report if args.json_output or args.markdown or args.csv_output else render_timeline(report)
 
 
