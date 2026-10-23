@@ -317,3 +317,17 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual([r["commits"] for r in report["periods"]], [1, 0, 1])
         self.assertEqual(report["week_start"], "monday")
         self.assertEqual(self.cli("timeline", "--period", "week", "--fill-gaps", "--max-periods", "2").returncode, 1)
+
+    def test_cumulative_timeline_totals_follow_selected_periods(self):
+        self.write("a", "first\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-01-01T00:00:00Z"})
+        self.write("a", "first\nsecond\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-03-01T00:00:00Z"})
+        report = self.payload("timeline", "--fill-gaps", "--cumulative")
+        self.assertEqual([r["cumulative_commits"] for r in report["periods"]], [1, 1, 2])
+        self.assertEqual([r["cumulative_additions"] for r in report["periods"]], [1, 1, 2])
+        self.assertEqual([r["commits"] for r in report["periods"]], [1, 0, 1])
+        selected = self.payload("timeline", "--cumulative", "--max-commits", "1")
+        self.assertEqual(selected["periods"][0]["cumulative_additions"], 1)
+        for flag in ("--markdown", "--no-color", "--csv"):
+            self.assertEqual(self.cli("timeline", "--cumulative", flag).returncode, 0)

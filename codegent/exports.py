@@ -80,9 +80,14 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", f"Target commits: {report['target_commits']}; showing {len(report['files'])} "
                   f"of {report['matching_files']} matching paths.", _cell(report["interpretation"])]
     elif command == "timeline":
-        lines += _table(["Period", "Commits", "Authors", "Files", "+", "-"], [
-            [row[key] for key in ("period", "commits", "authors", "files", "additions", "deletions")]
-            for row in report["periods"]])
+        keys = ["period", "commits", "authors", "files", "additions", "deletions"]
+        headers = ["Period", "Commits", "Authors", "Files", "+", "-"]
+        if report["cumulative"]:
+            keys += ["cumulative_commits", "cumulative_additions", "cumulative_deletions"]
+            headers += ["Total commits", "Total +", "Total -"]
+        lines += _table(headers, [[row[key] for key in keys] for row in report["periods"]])
+        if report["cumulative"]:
+            lines += ["", _cell(report["cumulative_scope"])]
         lines += ["", _cell(report["date_basis"])]
     elif command == "diff":
         summary = report["summary"]

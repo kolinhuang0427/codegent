@@ -170,6 +170,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     timeline.add_argument("--period", choices=("day", "week", "month", "year"), default="month")
     timeline.add_argument("--fill-gaps", action="store_true", help="Include empty periods between observed dates")
     timeline.add_argument("--max-periods", type=positive_int, default=1000)
+    timeline.add_argument("--cumulative", action="store_true", help="Include running totals within selected history")
     timeline.set_defaults(handler=_cmd_timeline)
 
     cochange = subparsers.add_parser("cochange", parents=[common], help="Find files changed in the same commits as a target")
@@ -448,7 +449,7 @@ def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 def _cmd_timeline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
-    report = timeline_report(history, period=args.period, date_basis=args.date_basis, fill_gaps=args.fill_gaps, max_periods=args.max_periods)
+    report = timeline_report(history, period=args.period, date_basis=args.date_basis, fill_gaps=args.fill_gaps, max_periods=args.max_periods, cumulative=args.cumulative)
     return report if args.json_output or args.markdown or args.csv_output else render_timeline(report)
 
 

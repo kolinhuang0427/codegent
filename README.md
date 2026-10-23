@@ -382,3 +382,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `owners --show-lines` adds inclusive `[start, end]` ranges of final-file line numbers for each attribution group. Ranges respect any selected line window and stay tied to the pinned revision, including after copy/move attribution.
 
 `timeline --period week` buckets normalized UTC dates into Monday-start weeks labeled by the Monday date. Gap filling advances seven days and handles calendar-year boundaries without week-number ambiguity.
+
+`timeline --cumulative` adds running commit, addition, deletion, and binary-change totals in displayed period order. Totals start at the selected history boundary and carry across empty periods; they are selected diff counts, not surviving-line measurements.

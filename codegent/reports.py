@@ -109,7 +109,7 @@ def render_owners(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author", fill_gaps: bool = False, max_periods: int = 1000) -> dict[str, Any]:
+def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author", fill_gaps: bool = False, max_periods: int = 1000, cumulative: bool = False) -> dict[str, Any]:
     positive_count(max_periods, "max_periods")
     widths = {"day": 10, "week": 10, "month": 7, "year": 4}
     if period not in widths:
@@ -154,19 +154,25 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
     if len(buckets) > max_periods:
         raise GitError("timeline exceeds --max-periods; increase the budget or narrow history")
     rows = [buckets[key] for key in sorted(buckets)]
+    running = {"commits": 0, "additions": 0, "deletions": 0, "binary_changes": 0}
     for row in rows:
+        if cumulative:
+            for key in running:
+                running[key] += row[key]
+                row["cumulative_" + key] = running[key]
         row["authors"] = len(row["authors"])
         row["files"] = len(row["files"])
     return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
             "selection": history.selection, "warnings": history.warnings, "period": period,
-            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "week_start": "monday" if period == "week" else None, "fill_gaps": fill_gaps, "max_periods": max_periods, "periods": rows}
+            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "week_start": "monday" if period == "week" else None, "fill_gaps": fill_gaps, "max_periods": max_periods, "cumulative": cumulative,
+            "cumulative_scope": "selected commits in displayed period order; diff counts, not surviving lines", "periods": rows}
 
 
 @safe_display
 def render_timeline(report: dict[str, Any]) -> str:
-    lines = [f"Activity timeline: {report['path']} ({report['date_basis']})", "Period  Commits  Authors  Files  +Lines  -Lines"]
-    lines.extend(f"{row['period']}  {row['commits']:7}  {row['authors']:7}  {row['files']:5}  {row['additions']:6}  {row['deletions']:6}" for row in report["periods"])
+    lines = [f"Activity timeline: {report['path']} ({report['date_basis']})", "Period  Commits  Authors  Files  +Lines  -Lines" + ("  Total commits  Total+  Total-" if report["cumulative"] else "")]
+    lines.extend(f"{row['period']}  {row['commits']:7}  {row['authors']:7}  {row['files']:5}  {row['additions']:6}  {row['deletions']:6}" + (f"  {row['cumulative_commits']}  {row['cumulative_additions']}  {row['cumulative_deletions']}" if report["cumulative"] else "") for row in report["periods"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
 
