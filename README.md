@@ -342,3 +342,5 @@ with timeline date/gap controls, file size/mode controls, and copy/commit blame
 attribution. Python requirements remain 3.10+; runtime dependencies remain empty.
 
 Blame reports reset implicitly configured `blame.ignoreRevsFile` entries. Only an explicitly supplied `owners --ignore-revs-file` changes attribution. Git still validates configured ignore files while reading its configuration.
+
+Unified patch previews explicitly use `a/` and `b/` prefixes and repository-root paths, independent of `diff.noprefix`, `diff.mnemonicPrefix`, or relative-display configuration.

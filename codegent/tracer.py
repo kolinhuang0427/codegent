@@ -499,6 +499,7 @@ class GitTracer:
         selected = [self.normalize_path(path) for path in (paths or [])]
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
         patch = self.git(["diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color",
+                          "--src-prefix=a/", "--dst-prefix=b/", "--no-relative",
                           f"--unified={context}", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected])
         size = len(patch.encode("utf-8", "surrogateescape"))
         if size > max_bytes:
