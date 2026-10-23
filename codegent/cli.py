@@ -17,7 +17,7 @@ from .exports import render_markdown, render_csv
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
+from .reports import directory_report, render_directories, author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -222,6 +222,13 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     patch.add_argument("--find-copies", action="store_true", help="Detect copied blocks from unchanged source files")
     patch.set_defaults(handler=_cmd_patch)
 
+    directories = subparsers.add_parser("directories", parents=[common], help="Aggregate historical activity by directory")
+    directories.add_argument("path", nargs="?", default=".")
+    directories.add_argument("--depth", type=positive_int, default=1)
+    directories.add_argument("--limit", type=positive_int, default=20)
+    directories.add_argument("--sort", choices=("churn", "commits", "path"), default="churn")
+    directories.set_defaults(handler=_cmd_directories)
+
     return parser
 
 
@@ -243,6 +250,7 @@ def main(argv: list[str] | None = None) -> int:
     invalid = {
         "diff": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
         "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
+        "directories": {"follow"},
         "hotspots": {"follow"},
         "timeline": {"follow"},
         "cochange": {"follow"},
@@ -469,3 +477,9 @@ def _error(message: str, *, json_output: bool, color: bool) -> int:
     rendered = json.dumps({"error": message}) if json_output else danger(f"codegent: {escape_text(message)}", color)
     print(_stream_text(rendered, sys.stderr), file=sys.stderr)
     return 1
+
+
+def _cmd_directories(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
+    report = directory_report(history, depth=args.depth, limit=args.limit, sort=args.sort)
+    return report if args.json_output or args.markdown or args.csv_output else render_directories(report)

@@ -38,6 +38,10 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
             for row in report["files"]])
         lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching paths.",
                   _cell(report["path_policy"])]
+    elif command == "directories":
+        lines += _table(["Directory", "Commits", "Authors", "Files", "Churn"], [
+            [row[key] for key in ("path", "commits", "authors", "files", "churn")] for row in report["directories"]])
+        lines += ["", f"Showing {len(report['directories'])} of {report['total_directories']} directories.", _cell(report["path_policy"])]
     elif command == "owners":
         keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])
         lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []), [
@@ -89,6 +93,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
 
 # Schemas retain meaningful headers even when a report has no data rows.
 _CSV_TABLES = {
+    "directories": ("directories", ("path", "commits", "authors", "files", "additions", "deletions", "churn", "binary_changes")),
     "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
     "hotspots": ("files", ("path", "commits", "churn", "binary_changes")),
     "cochange": ("files", ("path", "shared_commits", "fraction")),

@@ -250,3 +250,45 @@ def render_patch(report: dict[str, Any]) -> str:
     title = escape_text(f"Patch preview: {report['commit_a']} -> {report['commit_b']}")
     content = "\n".join(escape_text(line) for line in report["patch"].split("\n"))
     return title + "\n" + (content or "No changes.\n")
+
+
+def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sort: str = "churn") -> dict[str, Any]:
+    positive_count(depth, "depth")
+    positive_count(limit, "limit")
+    if sort not in {"churn", "commits", "path"}:
+        raise GitError("directory sort must be churn, commits, or path")
+    groups: dict[str, dict[str, Any]] = {}
+    for commit in history.commits:
+        touched = set()
+        for change in commit.changes:
+            parent = "/".join(change["path"].split("/")[:-1][:depth]) or "."
+            row = groups.setdefault(parent, {"path": parent, "commits": 0, "authors": set(), "files": set(),
+                                             "additions": 0, "deletions": 0, "binary_changes": 0})
+            row["files"].add(change["path"])
+            row["authors"].add(commit.author)
+            row["additions"] += change["additions"]
+            row["deletions"] += change["deletions"]
+            row["binary_changes"] += int(change["binary"])
+            touched.add(parent)
+        for parent in touched:
+            groups[parent]["commits"] += 1
+    for row in groups.values():
+        row["authors"] = len(row["authors"])
+        row["files"] = len(row["files"])
+        row["churn"] = row["additions"] + row["deletions"]
+    rows = sorted(groups.values(), key=lambda row: (0 if sort == "path" else -row[sort], row["path"]))
+    return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
+            "resolved_ref": history.resolved_ref, "selection": history.selection, "warnings": history.warnings,
+            "history_complete": history.history_complete, "scanned_commits": len(history.commits),
+            "depth": depth, "sort": sort, "total_directories": len(rows), "directories": rows[:limit],
+            "path_policy": "root-relative historical destination paths; renamed names are not unified"}
+
+
+@safe_display
+def render_directories(report: dict[str, Any]) -> str:
+    lines = [f"Directory activity: {report['path']}", "Commits  Churn  Files  Authors  Directory"]
+    lines.extend(f"{r['commits']:7}  {r['churn']:5}  {r['files']:5}  {r['authors']:7}  {r['path']}" for r in report["directories"])
+    lines.append(f"Showing {len(report['directories'])} of {report['total_directories']} directories")
+    lines.extend(f"Warning: {w}" for w in report["warnings"])
+    lines.append(report["path_policy"])
+    return "\n".join(lines) + "\n"

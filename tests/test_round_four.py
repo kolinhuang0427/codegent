@@ -225,3 +225,19 @@ class RoundFourTests(RepositoryCase):
         self.assertIn("copy from old", copied["patch"])
         self.assertIn("copy to new", copied["patch"])
         self.assertTrue(copied["find_copies"])
+
+    def test_directory_activity_counts_commits_once_per_group(self):
+        self.write("src/a.py")
+        self.write("src/pkg/b.py")
+        self.write("README")
+        self.commit()
+        self.write("src/a.py", "changed\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        report = self.payload("directories")
+        src = next(r for r in report["directories"] if r["path"] == "src")
+        self.assertEqual((src["commits"], src["files"], src["authors"]), (2, 2, 2))
+        detailed = self.payload("directories", "--depth", "2", "--sort", "path")
+        self.assertEqual([r["path"] for r in detailed["directories"]], [".", "src", "src/pkg"])
+        for flag in ("--csv", "--markdown", "--no-color"):
+            self.assertEqual(self.cli("directories", flag).returncode, 0)
+        self.assertFalse(self.payload("directories", "--max-commits", "1")["history_complete"])
