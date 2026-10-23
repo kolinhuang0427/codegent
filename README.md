@@ -340,3 +340,15 @@ is a metadata carrier, not a data observation. Formats are mutually exclusive.
 Version 0.4.0 adds `refs`, `commits BASE TARGET`, and `patch BASE TARGET`, along
 with timeline date/gap controls, file size/mode controls, and copy/commit blame
 attribution. Python requirements remain 3.10+; runtime dependencies remain empty.
+
+Blame reports reset implicitly configured `blame.ignoreRevsFile` entries. Only an explicitly supplied `owners --ignore-revs-file` changes attribution. Git still validates configured ignore files while reading its configuration.
+
+Unified patch previews explicitly use `a/` and `b/` prefixes and repository-root paths, independent of `diff.noprefix`, `diff.mnemonicPrefix`, or relative-display configuration.
+
+Repository-wide history and commit ranges include empty commits and merge commits. A literal file/directory scope still uses Git path-limited traversal and can omit commits that do not change that scope. Merge statistics follow Git's default history presentation.
+
+History `--ignore-case` makes literal `--author` and `--grep` matching case-insensitive. It requires one of these filters and records the setting in selection metadata.
+
+History `--merges` selects commits with multiple parents; `--no-merges` excludes them. Merge selection is recorded separately from first-parent traversal, and scoped Git traversal can still omit merges unrelated to the path.
+
+`commits BASE TARGET --ancestry-path` keeps only commits descending from BASE and reachable from TARGET, excluding side history that forked before BASE. Merge-selection flags remain exclusive even when placed on opposite sides of the command name.

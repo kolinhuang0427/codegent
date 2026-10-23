@@ -217,11 +217,14 @@ class GitTracer:
         until: str | None = None,
         author: str | None = None,
         grep: str | None = None,
+        ignore_case: bool = False,
+        merge_filter: str | None = None,
         follow: bool | None = True,
         allow_empty: bool = False,
         first_parent: bool = False,
         newest_first: bool = False,
         exclude_ref: str | None = None,
+        ancestry_path: bool = False,
     ) -> Bloodline:
         positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
@@ -251,6 +254,11 @@ class GitTracer:
         ]
         if self.ignore_whitespace:
             selection["ignore_whitespace"] = True
+        if merge_filter not in {None, "merges", "no-merges"}:
+            raise GitError("merge filter must be merges or no-merges")
+        if merge_filter:
+            args.append("--" + merge_filter)
+            selection["merge_filter"] = merge_filter
         if first_parent:
             args.append("--first-parent")
             selection["first_parent"] = True
@@ -258,6 +266,9 @@ class GitTracer:
             args.append("--follow")
         elif follow is False:
             selection["follow"] = False
+        if ignore_case:
+            args.append("--regexp-ignore-case")
+            selection["ignore_case"] = True
         if grep:
             selection["grep"] = grep
             args.extend(["--fixed-strings", f"--grep={grep}"])
@@ -271,11 +282,18 @@ class GitTracer:
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits + 1}")
         args.append(resolved)
+        if ancestry_path and exclude_ref is None:
+            raise GitError("ancestry-path requires an excluded base ref")
+        if ancestry_path:
+            args.append("--ancestry-path")
+            selection["ancestry_path"] = True
         if exclude_ref is not None:
             excluded = self.resolve_ref(exclude_ref)
             selection.update(excluded_ref=exclude_ref, excluded_resolved=excluded)
             args.append(f"^{excluded}")
-        args.extend(["--", path])
+        args.append("--")
+        if path != "." or follow is not None:
+            args.append(path)
 
         output = self.git(args)
         newest_commits = self._parse_log(output)
@@ -425,7 +443,7 @@ class GitTracer:
             raise GitError("ownership grouping must be author or commit")
         source, size = self._text_blob(commit, path, max_bytes=max_bytes, purpose="line ownership")
         file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
-        args = ["blame", "--line-porcelain"]
+        args = ["blame", "--line-porcelain", "--ignore-revs-file", ""]
         if detect_moves:
             args.append("-M")
         if detect_copies:
@@ -499,6 +517,7 @@ class GitTracer:
         selected = [self.normalize_path(path) for path in (paths or [])]
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
         patch = self.git(["diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color",
+                          "--src-prefix=a/", "--dst-prefix=b/", "--no-relative",
                           f"--unified={context}", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected])
         size = len(patch.encode("utf-8", "surrogateescape"))
         if size > max_bytes:
