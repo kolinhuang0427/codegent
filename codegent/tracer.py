@@ -563,6 +563,29 @@ class GitTracer:
                 "size_bytes": size, "max_bytes": max_bytes, "ignore_whitespace": self.ignore_whitespace,
                 "rename_threshold": self.rename_threshold, "patch": patch}
 
+    def divergence(self, base: str, target: str) -> dict[str, Any]:
+        self.ensure_repository()
+        left, right = self.resolve_ref(base), self.resolve_ref(target)
+        try:
+            counts = self.git(["rev-list", "--left-right", "--count", f"{left}...{right}", "--"]).split()
+            left_count, right_count = map(int, counts)
+            union = int(self.git(["rev-list", "--count", left, right, "--"]).strip())
+            shared = union - left_count - right_count
+            if min(left_count, right_count, shared) < 0:
+                raise ValueError("negative traversal count")
+        except ValueError as exc:
+            raise GitError("cannot parse Git divergence counts") from exc
+        bases = self.git(["merge-base", "--all", left, right], check=False).splitlines()
+        shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
+        relationship = ("equal" if left == right else "unrelated" if not bases else
+                        "base-ancestor" if left_count == 0 else "target-ancestor" if right_count == 0 else "diverged")
+        return {"repo": self.repo, "commit_a": base, "commit_b": target, "resolved_a": left, "resolved_b": right,
+                "relationship": relationship, "merge_bases": bases, "shared_commits": shared,
+                "shallow": shallow, "history_complete": not shallow,
+                "warnings": ["Shallow repository: counts and relationships describe locally available history."] if shallow else [],
+                "sides": [{"side": "base", "ref": base, "resolved_ref": left, "unique_commits": left_count},
+                          {"side": "target", "ref": target, "resolved_ref": right, "unique_commits": right_count}]}
+
     def _diff_detection(self, find_copies: bool) -> list[str]:
         flags = [f"--find-renames={self.rename_threshold}%"]
         if find_copies:

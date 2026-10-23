@@ -250,3 +250,88 @@ def render_patch(report: dict[str, Any]) -> str:
     title = escape_text(f"Patch preview: {report['commit_a']} -> {report['commit_b']}")
     content = "\n".join(escape_text(line) for line in report["patch"].split("\n"))
     return title + "\n" + (content or "No changes.\n")
+
+
+def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sort: str = "churn") -> dict[str, Any]:
+    positive_count(depth, "depth")
+    positive_count(limit, "limit")
+    if sort not in {"churn", "commits", "path"}:
+        raise GitError("directory sort must be churn, commits, or path")
+    groups: dict[str, dict[str, Any]] = {}
+    for commit in history.commits:
+        touched = set()
+        for change in commit.changes:
+            parent = "/".join(change["path"].split("/")[:-1][:depth]) or "."
+            row = groups.setdefault(parent, {"path": parent, "commits": 0, "authors": set(), "files": set(),
+                                             "additions": 0, "deletions": 0, "binary_changes": 0})
+            row["files"].add(change["path"])
+            row["authors"].add(commit.author)
+            row["additions"] += change["additions"]
+            row["deletions"] += change["deletions"]
+            row["binary_changes"] += int(change["binary"])
+            touched.add(parent)
+        for parent in touched:
+            groups[parent]["commits"] += 1
+    for row in groups.values():
+        row["authors"] = len(row["authors"])
+        row["files"] = len(row["files"])
+        row["churn"] = row["additions"] + row["deletions"]
+    rows = sorted(groups.values(), key=lambda row: (0 if sort == "path" else -row[sort], row["path"]))
+    return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
+            "resolved_ref": history.resolved_ref, "selection": history.selection, "warnings": history.warnings,
+            "history_complete": history.history_complete, "scanned_commits": len(history.commits),
+            "depth": depth, "sort": sort, "total_directories": len(rows), "directories": rows[:limit],
+            "path_policy": "root-relative historical destination paths; renamed names are not unified"}
+
+
+@safe_display
+def render_directories(report: dict[str, Any]) -> str:
+    lines = [f"Directory activity: {report['path']}", "Commits  Churn  Files  Authors  Directory"]
+    lines.extend(f"{r['commits']:7}  {r['churn']:5}  {r['files']:5}  {r['authors']:7}  {r['path']}" for r in report["directories"])
+    lines.append(f"Showing {len(report['directories'])} of {report['total_directories']} directories")
+    lines.extend(f"Warning: {w}" for w in report["warnings"])
+    lines.append(report["path_policy"])
+    return "\n".join(lines) + "\n"
+
+
+def inventory_report(snapshot: dict[str, Any], *, group_by: str = "extension", depth: int = 1,
+                     sort: str = "bytes", limit: int = 20) -> dict[str, Any]:
+    import posixpath
+    positive_count(depth, "depth")
+    positive_count(limit, "limit")
+    if group_by not in {"extension", "directory"} or sort not in {"bytes", "entries", "name"}:
+        raise GitError("invalid inventory grouping or sort")
+    if snapshot["truncated"]:
+        raise GitError("inventory requires an untruncated tree snapshot")
+    groups: dict[str, dict[str, Any]] = {}
+    for item in snapshot["files"]:
+        key = (posixpath.splitext(posixpath.basename(item["path"]))[1].casefold() or "(none)") if group_by == "extension" else ("/".join(item["path"].split("/")[:-1][:depth]) or ".")
+        row = groups.setdefault(key, {"group": key, "entries": 0, "known_bytes": 0, "unknown_size_entries": 0, "modes": {}})
+        row["entries"] += 1
+        row["known_bytes"] += item["size"] or 0
+        row["unknown_size_entries"] += int(item["size"] is None)
+        row["modes"][item["mode"]] = row["modes"].get(item["mode"], 0) + 1
+    metric = "known_bytes" if sort == "bytes" else sort
+    rows = sorted(groups.values(), key=lambda row: (0 if sort == "name" else -row[metric], row["group"]))
+    return {"repo": snapshot["repo"], "path": snapshot["path"], "requested_ref": snapshot["requested_ref"],
+            "resolved_ref": snapshot["resolved_ref"], "group_by": group_by, "depth": depth, "sort": sort,
+            "total_entries": snapshot["matching_files"], "known_bytes": snapshot["total_bytes"],
+            "unknown_size_entries": snapshot["unknown_size_entries"], "total_groups": len(rows), "groups": rows[:limit],
+            "interpretation": "committed Git object bytes, including symlink contents; not checkout disk usage"}
+
+
+@safe_display
+def render_inventory(report: dict[str, Any]) -> str:
+    lines = [f"Tree inventory: {report['path']} at {report['resolved_ref'][:12]}", "Entries  Known bytes  Unknown sizes  Group"]
+    lines.extend(f"{r['entries']:7}  {r['known_bytes']:11}  {r['unknown_size_entries']:13}  {r['group']}" for r in report["groups"])
+    lines.append(f"Showing {len(report['groups'])} of {report['total_groups']} groups")
+    lines.append(report["interpretation"])
+    return "\n".join(lines) + "\n"
+
+
+@safe_display
+def render_divergence(report: dict[str, Any]) -> str:
+    lines = [f"Revision relationship: {report['relationship']}", f"Shared commits: {report['shared_commits']}", "Side  Unique commits  Ref"]
+    lines.extend(f"{r['side']}  {r['unique_commits']}  {r['ref']} ({r['resolved_ref'][:12]})" for r in report["sides"])
+    lines.extend(f"Warning: {w}" for w in report["warnings"])
+    return "\n".join(lines) + "\n"

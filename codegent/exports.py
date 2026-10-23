@@ -38,6 +38,18 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
             for row in report["files"]])
         lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching paths.",
                   _cell(report["path_policy"])]
+    elif command == "divergence":
+        lines += [f"Relationship: {_cell(report['relationship'])}; shared commits: {report['shared_commits']}.", ""]
+        lines += _table(["Side", "Ref", "Resolved tip", "Unique commits"], [
+            [row[key] for key in ("side", "ref", "resolved_ref", "unique_commits")] for row in report["sides"]])
+    elif command == "inventory":
+        lines += _table(["Group", "Entries", "Known bytes", "Unknown sizes"], [
+            [row[key] for key in ("group", "entries", "known_bytes", "unknown_size_entries")] for row in report["groups"]])
+        lines += ["", f"Showing {len(report['groups'])} of {report['total_groups']} groups.", _cell(report["interpretation"])]
+    elif command == "directories":
+        lines += _table(["Directory", "Commits", "Authors", "Files", "Churn"], [
+            [row[key] for key in ("path", "commits", "authors", "files", "churn")] for row in report["directories"]])
+        lines += ["", f"Showing {len(report['directories'])} of {report['total_directories']} directories.", _cell(report["path_policy"])]
     elif command == "owners":
         keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])
         lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []), [
@@ -89,6 +101,9 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
 
 # Schemas retain meaningful headers even when a report has no data rows.
 _CSV_TABLES = {
+    "divergence": ("sides", ("side", "ref", "resolved_ref", "unique_commits")),
+    "inventory": ("groups", ("group", "entries", "known_bytes", "unknown_size_entries", "modes")),
+    "directories": ("directories", ("path", "commits", "authors", "files", "additions", "deletions", "churn", "binary_changes")),
     "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
     "hotspots": ("files", ("path", "commits", "churn", "binary_changes")),
     "cochange": ("files", ("path", "shared_commits", "fraction")),

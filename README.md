@@ -370,3 +370,9 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `patch BASE TARGET --merge-base` previews target changes since the unique shared ancestor, using the same merge-base validation as `diff`. Reports retain the input base SHA and effective comparison base.
 
 `patch --find-copies` enables the same copy-detection threshold and unchanged-source search as `diff --find-copies`. Patch headers distinguish copied paths from renames; detection remains a Git similarity heuristic.
+
+`directories [PATH] --depth N --sort churn|commits|path --limit N` aggregates historical activity by root-relative directory. A commit counts once per directory even when it changes multiple files there. Groups report distinct historical paths and authors, line churn, and binary changes. Root files use `.`. History filters and completeness warnings apply; renames use historical destination paths.
+
+`inventory [PATH] --group-by extension|directory --depth N --sort bytes|entries|name --limit N` summarizes the complete committed tree before limiting groups. Extension groups are case-folded; extensionless files use `(none)`. Groups include entry counts, known object bytes, unknown-size entries, and Git modes. Bytes measure Git objects, including symlink contents, rather than checkout disk usage.
+
+`divergence BASE TARGET` reports locally reachable commits unique to each side, shared commits, all merge bases, and whether the tips are equal, ancestors, diverged, or unrelated. It resolves both tips once and does not fetch. Shallow repositories explicitly warn that counts and relationships describe only available history.
