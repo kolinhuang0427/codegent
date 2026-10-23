@@ -241,3 +241,20 @@ class RoundFourTests(RepositoryCase):
         for flag in ("--csv", "--markdown", "--no-color"):
             self.assertEqual(self.cli("directories", flag).returncode, 0)
         self.assertFalse(self.payload("directories", "--max-commits", "1")["history_complete"])
+
+    def test_inventory_groups_complete_tree_by_extension_or_directory(self):
+        self.write("src/a.py", "abc")
+        self.write("src/b.PY", "defgh")
+        self.write("README", "x")
+        self.commit()
+        report = self.payload("inventory", "--limit", "1")
+        self.assertEqual(report["total_entries"], 3)
+        self.assertEqual(report["known_bytes"], 9)
+        self.assertEqual(report["groups"][0]["group"], ".py")
+        self.assertEqual(report["groups"][0]["known_bytes"], 8)
+        self.assertEqual(report["groups"][0]["entries"], 2)
+        grouped = self.payload("inventory", "src", "--group-by", "directory")
+        self.assertEqual(grouped["groups"][0]["group"], "src")
+        for flag in ("--csv", "--markdown", "--no-color"):
+            self.assertEqual(self.cli("inventory", flag).returncode, 0)
+        self.assertEqual(self.cli("inventory", "--author", "First").returncode, 2)

@@ -17,7 +17,7 @@ from .exports import render_markdown, render_csv
 from .display import escape_text, ascii_graphics
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
-from .reports import directory_report, render_directories, author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
+from .reports import inventory_report, render_inventory, directory_report, render_directories, author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -229,6 +229,14 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     directories.add_argument("--sort", choices=("churn", "commits", "path"), default="churn")
     directories.set_defaults(handler=_cmd_directories)
 
+    inventory = subparsers.add_parser("inventory", parents=[common], help="Summarize committed object sizes by extension or directory")
+    inventory.add_argument("path", nargs="?", default=".")
+    inventory.add_argument("--group-by", choices=("extension", "directory"), default="extension")
+    inventory.add_argument("--depth", type=positive_int, default=1)
+    inventory.add_argument("--limit", type=positive_int, default=20)
+    inventory.add_argument("--sort", choices=("bytes", "entries", "name"), default="bytes")
+    inventory.set_defaults(handler=_cmd_inventory)
+
     return parser
 
 
@@ -259,6 +267,7 @@ def main(argv: list[str] | None = None) -> int:
         "refs": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "doctor": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "source": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
+        "inventory": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
         "files": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap", "ignore_whitespace"},
     }.get(args.command, set())
     if args.command not in {"trace", "ancestry", "genemap", "bloodline", "commits"}:
@@ -483,3 +492,9 @@ def _cmd_directories(args: argparse.Namespace, color: bool) -> dict[str, Any] | 
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
     report = directory_report(history, depth=args.depth, limit=args.limit, sort=args.sort)
     return report if args.json_output or args.markdown or args.csv_output else render_directories(report)
+
+
+def _cmd_inventory(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    snapshot = _tracer(args).tracked_files(args.path, args.ref, limit=None)
+    report = inventory_report(snapshot, group_by=args.group_by, depth=args.depth, sort=args.sort, limit=args.limit)
+    return report if args.json_output or args.markdown or args.csv_output else render_inventory(report)

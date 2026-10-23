@@ -292,3 +292,38 @@ def render_directories(report: dict[str, Any]) -> str:
     lines.extend(f"Warning: {w}" for w in report["warnings"])
     lines.append(report["path_policy"])
     return "\n".join(lines) + "\n"
+
+
+def inventory_report(snapshot: dict[str, Any], *, group_by: str = "extension", depth: int = 1,
+                     sort: str = "bytes", limit: int = 20) -> dict[str, Any]:
+    import posixpath
+    positive_count(depth, "depth")
+    positive_count(limit, "limit")
+    if group_by not in {"extension", "directory"} or sort not in {"bytes", "entries", "name"}:
+        raise GitError("invalid inventory grouping or sort")
+    if snapshot["truncated"]:
+        raise GitError("inventory requires an untruncated tree snapshot")
+    groups: dict[str, dict[str, Any]] = {}
+    for item in snapshot["files"]:
+        key = (posixpath.splitext(posixpath.basename(item["path"]))[1].casefold() or "(none)") if group_by == "extension" else ("/".join(item["path"].split("/")[:-1][:depth]) or ".")
+        row = groups.setdefault(key, {"group": key, "entries": 0, "known_bytes": 0, "unknown_size_entries": 0, "modes": {}})
+        row["entries"] += 1
+        row["known_bytes"] += item["size"] or 0
+        row["unknown_size_entries"] += int(item["size"] is None)
+        row["modes"][item["mode"]] = row["modes"].get(item["mode"], 0) + 1
+    metric = "known_bytes" if sort == "bytes" else sort
+    rows = sorted(groups.values(), key=lambda row: (0 if sort == "name" else -row[metric], row["group"]))
+    return {"repo": snapshot["repo"], "path": snapshot["path"], "requested_ref": snapshot["requested_ref"],
+            "resolved_ref": snapshot["resolved_ref"], "group_by": group_by, "depth": depth, "sort": sort,
+            "total_entries": snapshot["matching_files"], "known_bytes": snapshot["total_bytes"],
+            "unknown_size_entries": snapshot["unknown_size_entries"], "total_groups": len(rows), "groups": rows[:limit],
+            "interpretation": "committed Git object bytes, including symlink contents; not checkout disk usage"}
+
+
+@safe_display
+def render_inventory(report: dict[str, Any]) -> str:
+    lines = [f"Tree inventory: {report['path']} at {report['resolved_ref'][:12]}", "Entries  Known bytes  Unknown sizes  Group"]
+    lines.extend(f"{r['entries']:7}  {r['known_bytes']:11}  {r['unknown_size_entries']:13}  {r['group']}" for r in report["groups"])
+    lines.append(f"Showing {len(report['groups'])} of {report['total_groups']} groups")
+    lines.append(report["interpretation"])
+    return "\n".join(lines) + "\n"

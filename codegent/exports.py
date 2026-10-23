@@ -38,6 +38,10 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
             for row in report["files"]])
         lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching paths.",
                   _cell(report["path_policy"])]
+    elif command == "inventory":
+        lines += _table(["Group", "Entries", "Known bytes", "Unknown sizes"], [
+            [row[key] for key in ("group", "entries", "known_bytes", "unknown_size_entries")] for row in report["groups"]])
+        lines += ["", f"Showing {len(report['groups'])} of {report['total_groups']} groups.", _cell(report["interpretation"])]
     elif command == "directories":
         lines += _table(["Directory", "Commits", "Authors", "Files", "Churn"], [
             [row[key] for key in ("path", "commits", "authors", "files", "churn")] for row in report["directories"]])
@@ -93,6 +97,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
 
 # Schemas retain meaningful headers even when a report has no data rows.
 _CSV_TABLES = {
+    "inventory": ("groups", ("group", "entries", "known_bytes", "unknown_size_entries", "modes")),
     "directories": ("directories", ("path", "commits", "authors", "files", "additions", "deletions", "churn", "binary_changes")),
     "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
     "hotspots": ("files", ("path", "commits", "churn", "binary_changes")),
