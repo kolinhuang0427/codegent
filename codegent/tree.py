@@ -77,6 +77,8 @@ def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
         marker = _role_marker(commit.role)
         marker = paint(marker, _role_color(commit.role), color, bold=True)
         annotation = _milestone(commit)
+        if commit.role == "boundary":
+            annotation = "history boundary" + ("; " + annotation if annotation else "")
         lines.append(
             "  "
             + f"{graphics('│')} {marker} {paint(commit.short_hash, ANSI.YELLOW, color)} "
@@ -200,6 +202,7 @@ def _format_age_days(days: int | None) -> str:
 
 def _role_marker(role_name: str) -> str:
     return graphics({
+        "boundary": "?",
         "origin": "◆",
         "heir": "◇",
         "co-author": "●",
@@ -210,6 +213,7 @@ def _role_marker(role_name: str) -> str:
 
 def _role_color(role_name: str) -> str:
     return {
+        "boundary": ANSI.YELLOW,
         "origin": ANSI.GREEN,
         "heir": ANSI.CYAN,
         "co-author": ANSI.MAGENTA,
