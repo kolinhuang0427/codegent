@@ -126,3 +126,58 @@ class RoundTwoTests(RepositoryCase):
                 GitTracer(str(self.repo), rename_threshold=threshold)
         with self.assertRaises(GitError):
             GitTracer(str(self.repo), timeout=True)
+
+    def test_commit_message_search_is_literal_and_marks_filtered_history(self):
+        self.write("file.py")
+        self.commit("add [parser]")
+        self.write("file.py", "updated\n")
+        self.commit("unrelated")
+        report = self.payload("trace", "file.py", "--grep", "[parser]")
+        self.assertEqual(report["total_commits"], 1)
+        self.assertEqual(report["selection"]["grep"], "[parser]")
+        self.assertFalse(report["origin_confirmed"])
+        self.assertEqual(self.payload("hotspots", "--grep", "[parser]")["scanned_commits"], 1)
+
+    def test_hotspots_can_exclude_generated_or_vendor_path_globs(self):
+        self.write("src/file.py")
+        self.write("vendor/generated.py")
+        self.write("build/output.py")
+        self.commit()
+        report = self.payload("hotspots", "--exclude", "vendor/*", "--exclude", "build/*")
+        self.assertEqual([row["path"] for row in report["files"]], ["src/file.py"])
+        self.assertEqual(report["excludes"], ["vendor/*", "build/*"])
+
+    def test_current_only_hotspots_follow_the_selected_tip(self):
+        self.write("gone.py")
+        self.write("present.py")
+        original = self.commit()
+        self.git("rm", "gone.py")
+        self.commit()
+        current = self.payload("hotspots", "--current-only")
+        self.assertEqual([row["path"] for row in current["files"]], ["present.py"])
+        self.assertTrue(current["current_only"])
+        self.assertEqual(self.payload("hotspots", "--current-only", "--ref", original)["matching_files"], 2)
+
+    def test_authors_can_group_name_variants_by_email(self):
+        self.write("file.py")
+        self.commit()
+        self.write("file.py", "changed\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Another Name", "GIT_AUTHOR_EMAIL": "first@example.test"})
+        self.assertEqual(self.payload("authors", "file.py")["total_authors"], 2)
+        report = self.payload("authors", "file.py", "--group-by", "email")
+        self.assertEqual(report["total_authors"], 1)
+        self.assertEqual(report["authors"][0]["commits"], 2)
+        self.assertEqual(len(report["authors"][0]["identities"]), 2)
+
+    def test_author_thresholds_disclose_omitted_contributors(self):
+        self.write("file.py")
+        self.commit()
+        self.write("file.py", "second\n")
+        self.commit()
+        self.write("file.py", "third\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        report = self.payload("authors", "file.py", "--min-commits", "2")
+        self.assertEqual(report["total_authors"], 2)
+        self.assertEqual(report["matching_authors"], 1)
+        self.assertEqual(report["omitted_authors"], 1)
+        self.assertEqual(report["authors"][0]["commits"], 2)

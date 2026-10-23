@@ -54,6 +54,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common.add_argument("--rename-threshold", type=int, default=argparse.SUPPRESS, help="Rename similarity percentage, 1-100 (default: 50)")
     common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
+    common.add_argument("--grep", default=argparse.SUPPRESS, help="Literal commit-message substring")
     common.add_argument("--author", default=argparse.SUPPRESS, help="Literal author name/email substring")
     common.add_argument("--since", default=argparse.SUPPRESS, help="Include commits since an ISO date (UTC if unspecified)")
     common.add_argument("--until", default=argparse.SUPPRESS, help="Include commits up to an ISO date")
@@ -105,12 +106,16 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     authors = subparsers.add_parser("authors", parents=[common], help="Summarize authors and churn for a file")
     authors.add_argument("path")
+    authors.add_argument("--group-by", choices=("identity", "email"), default="identity", help="Combine name variants sharing an email")
     authors.add_argument("--sort", choices=("commits", "churn", "name"), default="commits")
+    authors.add_argument("--min-commits", type=positive_int, default=1)
     authors.add_argument("--limit", type=positive_int, default=20)
     authors.set_defaults(handler=_cmd_authors)
 
     hotspots = subparsers.add_parser("hotspots", parents=[common], help="Rank historical paths by change activity")
     hotspots.add_argument("path", nargs="?", default=".")
+    hotspots.add_argument("--current-only", action="store_true", help="Keep only paths present at the selected tip")
+    hotspots.add_argument("--exclude", action="append", default=[], help="Exclude a root-relative path glob (repeatable)")
     hotspots.add_argument("--sort", choices=("churn", "commits"), default="churn")
     hotspots.add_argument("--limit", type=positive_int, default=20)
     hotspots.add_argument("--min-commits", type=positive_int, default=1)
@@ -134,8 +139,8 @@ def main(argv: list[str] | None = None) -> int:
     if args.json_output and args.markdown:
         parser.error("choose one of --json and --markdown")
     invalid = {
-        "diff": {"ref", "since", "until", "author", "follow", "first_parent", "max_commits", "mailmap"},
-        "owners": {"since", "until", "author", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
+        "diff": {"ref", "since", "until", "author", "grep", "follow", "first_parent", "max_commits", "mailmap"},
+        "owners": {"since", "until", "author", "grep", "follow", "first_parent", "max_commits", "rename_threshold", "mailmap"},
         "hotspots": {"follow"},
     }.get(args.command, set())
     unsupported = sorted(provided & invalid)
@@ -197,7 +202,7 @@ def _write_output(text: str, destination: str | None) -> None:
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -205,7 +210,7 @@ def _apply_defaults(args: argparse.Namespace) -> None:
 
 
 def _history_options(args: argparse.Namespace) -> dict[str, Any]:
-    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "follow": args.follow, "first_parent": args.first_parent}
+    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "grep": args.grep, "follow": args.follow, "first_parent": args.first_parent}
 
 
 def _tracer(args: argparse.Namespace) -> GitTracer:
@@ -267,13 +272,17 @@ def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_authors(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = author_report(_history(args), sort=args.sort, limit=args.limit)
+    report = author_report(_history(args), sort=args.sort, limit=args.limit, group_by=args.group_by, min_commits=args.min_commits)
     return report if args.json_output or args.markdown else render_authors(report)
 
 
 def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
-    report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits)
+    tracer = _tracer(args)
+    history = tracer.repository_history(args.path, args.ref, **_history_options(args))
+    current_paths = None
+    if args.current_only:
+        current_paths = set(tracer.git(["ls-tree", "-r", "--name-only", "-z", history.resolved_ref]).split("\0")) - {""}
+    report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits, excludes=args.exclude, current_paths=current_paths)
     return report if args.json_output or args.markdown else render_hotspots(report)
 
 

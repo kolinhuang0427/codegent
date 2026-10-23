@@ -2,22 +2,29 @@
 from __future__ import annotations
 
 from typing import Any
+from fnmatch import fnmatchcase
 
 from .display import safe_display
 from .models import Bloodline
 from .tracer import iso_date, positive_count, GitError
 
 
-def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20) -> dict[str, Any]:
+def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20, group_by: str = "identity", min_commits: int = 1) -> dict[str, Any]:
     positive_count(limit, "limit")
+    positive_count(min_commits, "min_commits")
     if sort not in {"commits", "churn", "name"}:
         raise GitError("invalid author sort; choose commits, churn, or name")
+    if group_by not in {"identity", "email"}:
+        raise GitError("author grouping must be identity or email")
     authors: dict[str, dict[str, Any]] = {}
     for commit in bloodline.commits:
-        row = authors.setdefault(commit.author, {
-            "author": commit.author, "commits": 0, "additions": 0, "deletions": 0,
+        identity = commit.author_email.casefold() if group_by == "email" and commit.author_email else commit.author
+        row = authors.setdefault(identity, {
+            "author": identity, "identities": [], "commits": 0, "additions": 0, "deletions": 0,
             "binary_changes": 0, "first_seen": commit.date, "last_seen": commit.date,
         })
+        if commit.author not in row["identities"]:
+            row["identities"].append(commit.author)
         row["commits"] += 1
         row["additions"] += commit.additions
         row["deletions"] += commit.deletions
@@ -28,14 +35,16 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
             row["last_seen"] = commit.date
     for row in authors.values():
         row["churn"] = row["additions"] + row["deletions"]
-    rows = sorted(authors.values(), key=lambda row: (
+    rows = sorted((row for row in authors.values() if row["commits"] >= min_commits), key=lambda row: (
         0 if sort == "name" else -row[sort], row["author"].casefold(), row["author"],
     ))
     return {
         "path": bloodline.path, "repo": bloodline.repo, "requested_ref": bloodline.requested_ref, "resolved_ref": bloodline.resolved_ref,
         "history_complete": bloodline.history_complete, "warnings": bloodline.warnings,
         "selection": bloodline.selection, "total_commits": len(bloodline.commits),
-        "total_authors": len(rows), "authors": rows[:limit], "sort": sort,
+        "total_authors": len(authors), "matching_authors": len(rows), "displayed_authors": len(rows[:limit]),
+        "omitted_authors": len(authors) - len(rows[:limit]), "min_commits": min_commits,
+        "authors": rows[:limit], "sort": sort, "group_by": group_by,
     }
 
 
@@ -43,11 +52,12 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
 def render_authors(report: dict[str, Any]) -> str:
     lines = [f"Authors: {report['path']}", "Commits  Churn  Author"]
     lines.extend(f"{row['commits']:7}  {row['churn']:5}  {row['author']}" for row in report["authors"])
+    lines.append(f"Showing {report['displayed_authors']} of {report['total_authors']} authors (minimum {report['min_commits']} commits)")
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     return "\n".join(lines) + "\n"
 
 
-def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1) -> dict[str, Any]:
+def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1, excludes: list[str] | None = None, current_paths: set[str] | None = None) -> dict[str, Any]:
     positive_count(limit, "limit")
     positive_count(min_commits, "min_commits")
     if sort not in {"commits", "churn"}:
@@ -64,13 +74,15 @@ def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", 
             row["binary_changes"] += int(item["binary"])
     for row in files.values():
         row["churn"] = row["additions"] + row["deletions"]
-    rows = sorted((row for row in files.values() if row["commits"] >= min_commits),
+    rows = sorted((row for row in files.values() if row["commits"] >= min_commits
+                   and (current_paths is None or row["path"] in current_paths)
+                   and not any(fnmatchcase(row["path"], pattern) for pattern in (excludes or []))),
                   key=lambda row: (-row[sort], row["path"]))
     return {
         "repo": history.repo, "path": history.path, "requested_ref": history.requested_ref, "resolved_ref": history.resolved_ref,
         "history_complete": history.history_complete, "warnings": history.warnings,
         "selection": history.selection, "scanned_commits": len(history.commits),
-        "matching_files": len(rows), "files": rows[:limit], "sort": sort,
+        "matching_files": len(rows), "files": rows[:limit], "sort": sort, "excludes": excludes or [], "current_only": current_paths is not None,
         "path_policy": "historical names are counted separately across renames",
     }
 

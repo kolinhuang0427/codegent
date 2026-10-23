@@ -209,3 +209,19 @@ whitespace/rename settings alongside the requested comparison refs.
 
 Net carried-line estimates and origin age are `null` when the necessary complete
 baseline is unavailable. Binary transitions also make cumulative line estimates unknown.
+
+`--grep "literal text"` filters history-based reports by commit-message substring,
+including message bodies. It combines with date and author filters.
+
+`hotspots --exclude "vendor/*" --exclude "build/*"` removes root-relative
+path globs from the ranking. These patterns filter report rows; traced paths remain literal.
+
+`hotspots --current-only` keeps paths present at the selected commit, excluding
+deleted historical names. `--ref` controls the tree used for this filter.
+
+`authors --group-by email` combines recorded name variants sharing an email
+address. JSON retains the original `identities` in each group. Identity grouping
+remains the default; `.mailmap` is still available for explicit alias mappings.
+
+`authors --min-commits 3 --limit 10` focuses a contribution report while retaining
+total, matching, displayed, and omitted author counts so filtered rows stay explicit.
