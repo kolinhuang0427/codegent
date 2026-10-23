@@ -20,13 +20,14 @@ git gent trace src/auth.py
 
 ## Commands
 
-All commands support:
+Common output and repository options:
 
 ```bash
 --repo <path>       # repository path, defaults to current directory
 --json             # machine-readable output
 --no-color         # disable ANSI colors
---max-commits N    # cap history traversal, defaults to 10000
+--markdown         # portable Markdown report
+--csv              # tabular rows and report metadata
 ```
 
 ### Trace
@@ -185,8 +186,8 @@ Owners reports disclose shallow-clone blame boundaries and support
 cannot inject formatting into structured history parsing.
 
 CI exercises the real-repository suite on Linux and macOS with Python 3.10 and
-3.12, then builds a wheel and runs all thirteen installed commands in text, JSON,
-and Markdown outside the checkout. To repeat the installed-package check locally:
+3.12, then builds a wheel and runs all sixteen installed commands in text, JSON,
+Markdown, and CSV outside the checkout. To repeat the installed-package check locally:
 
 ```bash
 python -m pip wheel --no-deps --wheel-dir dist .
@@ -315,3 +316,27 @@ History JSON preserves both dates; Git since/until filters retain committer-date
 semantics regardless of the display basis.
 
 `timeline --fill-gaps` inserts empty periods only between the first and last selected dates. `--max-periods N` (default 1000) bounds all timeline rows and fails explicitly when exceeded; use date filters or a larger budget.
+
+`files --sort size` ranks by descending blob bytes, then path, with unknown sizes last. Limits apply after sorting. `total_bytes` sums known sizes; `unknown_size_entries` counts entries without a blob size.
+
+`files --kind all|file|executable|symlink|submodule` filters Git tree modes before sorting and limiting; `file` means non-executable regular files. `total_files` precedes the kind filter, while `matching_files`, known `total_bytes`, and `unknown_size_entries` describe the filtered selection before the display limit.
+
+`owners --detect-copies` enables Git blame `-C -C` to look for copied blocks across files, including other files when the target was created. This heuristic can be expensive and is independent of `--detect-moves`; attribution is not a claim of legal ownership.
+
+`owners --group-by commit` separates the surviving lines attributed to each commit, even for the same author. The default remains author grouping. Commit groups include full object IDs and the same selected-line percentage denominator.
+
+### CSV exports
+
+All 16 commands accept `--csv`, including `--output FILE` and `--no-clobber`.
+CSV uses standard quoted fields, preserving commas, quotes, Unicode, and embedded
+newlines. Lists, objects, booleans, and null values use JSON cells. History views
+export commit rows; other commands export their principal table, patch text, or
+diagnostic checks. Additional row fields are retained as columns. `report_metadata`
+is a JSON object containing all remaining report fields, including resolved refs,
+selection, warnings, and totals, repeated on each row. Empty tables emit one row
+with `row_present=false`; data rows have `row_present=true`. The empty-table row
+is a metadata carrier, not a data observation. Formats are mutually exclusive.
+
+Version 0.4.0 adds `refs`, `commits BASE TARGET`, and `patch BASE TARGET`, along
+with timeline date/gap controls, file size/mode controls, and copy/commit blame
+attribution. Python requirements remain 3.10+; runtime dependencies remain empty.

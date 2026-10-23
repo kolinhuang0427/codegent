@@ -18,11 +18,14 @@ Python CLI. Python 3.10+ and Git 2.37+ are required. The console entry point is
 | authors | Commit/churn aggregates by author for a file |
 | hotspots | Per-path historical change activity for a repository or directory |
 | owners | Surviving committed text-line attribution using Git blame |
-| timeline | UTC author-date activity buckets for a path scope |
+| timeline | UTC author/committer-date activity buckets, with optional bounded gap filling |
 | cochange | Historical paths changed in the same commits as a target file |
 | files | Tracked paths, modes, object IDs/types, and sizes at a selected commit |
 | source | Bounded, numbered text preview from a committed blob |
 | doctor | Read-only Git/runtime and worktree diagnostics |
+| refs | Local branches, remote-tracking refs and tags, with peeled tag metadata |
+| commits | Target-reachable commits excluding base ancestry, with immutable resolved bounds |
+| patch | Bounded unified diff preview between two commits, optionally scoped to literal paths |
 
 ## History selection
 
@@ -58,7 +61,7 @@ presentations of observed commits, not a complete branch graph.
 
 ## Output contract
 
-Reports support terminal text, JSON, or Markdown. JSON retains original strings;
+Reports support terminal text, JSON, Markdown, or CSV. JSON retains original strings;
 terminal and Markdown renderers escape control and bidi override characters.
 Long terminal box fields account for wide and combining characters. Terminal color
 obeys explicit no-color flags and plain-terminal environment settings.
@@ -83,7 +86,7 @@ explicitly. Owners reports disclose shallow blame boundaries.
 Author summaries support identity/email grouping and minimum-commit thresholds;
 counts distinguish all, matching, displayed, and omitted groups. Hotspots support
 root-relative exclusion globs and paths present at the selected tip. Other path
-inputs remain literal. Timeline buckets use UTC author dates; Git date selection
+inputs remain literal. Timeline buckets use configurable UTC author or committer dates; Git date selection
 continues to use committer dates. Cochange counts are co-occurrence, not evidence
 of dependency or causality. Historical filenames are not silently unified.
 
@@ -102,6 +105,31 @@ No-clobber file creation is atomic, and replacing a regular file preserves its
 access permission bits. Special mode bits are not copied. Diagnostics omit remote
 URLs and account credentials. Unsupported command/option combinations fail.
 
-The installed-wheel smoke check exercises all thirteen commands in text, JSON,
-and Markdown. CI repeats source and installed checks on Linux/macOS Python
+The installed-wheel smoke check exercises all sixteen commands in text, JSON,
+Markdown, and CSV. CI repeats source and installed checks on Linux/macOS Python
 3.10/3.12, cancelling superseded runs for the same ref.
+
+## Version 0.4 controls and CSV contract
+
+`refs` can select local branches, tags or remote-tracking refs with a row limit.
+Annotated tags preserve both tag-object and peeled-target metadata; refs are not
+fetched from a remote. Commit ranges mean commits reachable from target but not
+base, not an assumed linear interval. Range results record effective bounds and
+selection completeness. Patch previews use rename detection, optional literal
+paths, configurable nonnegative context and a post-generation byte budget; this
+budget is an export cap, not a Git subprocess memory limit. Raw patches are
+preserved in JSON and CSV; terminal and Markdown previews escape controls.
+
+Timeline gap filling spans only selected observed periods; a positive maximum
+period count (default 1000) bounds all timeline output. File mode filters precede
+path/size sorting and limiting. File totals distinguish the unfiltered inventory
+from matched entries; known byte totals and unknown-size counts describe matches.
+Blame bounds blob size before reading content, supports optional cross-file copy
+heuristics, and can group surviving lines by author or commit.
+
+CSV exports principal table rows, all their fields, and remaining report metadata
+in a JSON `report_metadata` column. Nested row values and nulls use JSON cells;
+strings and numbers remain native cells. Empty tables preserve metadata in one
+row with `row_present=false`; this is not an observation. Data rows use true.
+CSV quoting preserves raw values including newlines. JSON, CSV and Markdown
+formats are mutually exclusive. File output uses the same atomic/no-clobber path.

@@ -179,3 +179,107 @@ class RoundThreeTests(RepositoryCase):
         self.assertIn("max-periods", result.stderr)
         for period in ("day", "year"):
             self.assertTrue(self.payload("timeline", "--fill-gaps", "--period", period)["fill_gaps"])
+
+    def test_file_size_sort_precedes_limit(self):
+        self.write("a", "small")
+        self.write("b", "larger content")
+        self.write("c", "small")
+        self.commit()
+        report = self.payload("files", "--sort", "size", "--limit", "1")
+        self.assertEqual(report["files"][0]["path"], "b")
+        self.assertEqual(report["total_files"], 3)
+        self.assertEqual(report["total_bytes"], 24)
+        self.assertTrue(report["truncated"])
+        self.assertEqual([r["path"] for r in self.payload("files", "--sort", "size")["files"]], ["b", "a", "c"])
+        self.assertEqual([r["path"] for r in self.payload("files")["files"]], ["a", "b", "c"])
+
+    def test_file_kind_filters_git_modes(self):
+        self.write("plain", "plain\n")
+        self.write("run", "run\n")
+        os.chmod(self.repo / "run", 0o755)
+        os.symlink("plain", self.repo / "link")
+        tip = self.commit()
+        self.git("update-index", "--add", "--cacheinfo", f"160000,{tip},module")
+        self.git("commit", "-m", "add gitlink")
+        for kind, expected in (("file", "plain"), ("executable", "run"), ("symlink", "link"), ("submodule", "module")):
+            report = self.payload("files", "--kind", kind)
+            self.assertEqual([r["path"] for r in report["files"]], [expected])
+            self.assertEqual(report["total_files"], 4)
+            self.assertEqual(report["matching_files"], 1)
+            self.assertEqual(report["unknown_size_entries"], int(kind == "submodule"))
+            self.assertEqual(self.cli("files", "--kind", kind, "--markdown").returncode, 0)
+
+    def test_blame_cross_file_copy_attribution(self):
+        content = "".join(f"original_function_{n} = original_implementation_value_{n}\n" for n in range(20))
+        self.write("original.py", content)
+        original = self.commit("original")
+        self.write("copy.py", content)
+        copied = self.commit("copy", env={"GIT_AUTHOR_NAME": "Copy Author", "GIT_AUTHOR_EMAIL": "copy@example.test"})
+        default = self.payload("owners", "copy.py")
+        self.assertEqual(default["owners"][0]["commits"], [copied])
+        detected = self.payload("owners", "copy.py", "--detect-copies")
+        self.assertEqual(detected["owners"][0]["commits"], [original])
+        self.assertTrue(detected["detect_copies"])
+        self.assertFalse(detected["detect_moves"])
+
+    def test_ownership_can_group_surviving_lines_by_commit(self):
+        self.write("a", "first line\n")
+        first = self.commit("first")
+        self.write("a", "first line\nsecond line\n")
+        second = self.commit("second")
+        self.assertEqual(len(self.payload("owners", "a")["owners"]), 1)
+        report = self.payload("owners", "a", "--group-by", "commit")
+        self.assertEqual({r["commit"] for r in report["owners"]}, {first, second})
+        self.assertEqual([r["lines"] for r in report["owners"]], [1, 1])
+        self.assertEqual(sum(r["percentage"] for r in report["owners"]), 100)
+        for flag in ("--markdown", "--no-color"):
+            result = self.cli("owners", "a", "--group-by", "commit", flag)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertIn(first, result.stdout)
+
+    def test_csv_preserves_quoting_nested_metadata_and_empty_tables(self):
+        name = '新, "quoted"\nfile'
+        self.write(name, "one\ntwo\n")
+        base = self.commit('message, "quoted"')
+        result = self.cli("files", "--csv")
+        self.assertEqual(result.returncode, 0, result.stderr)
+        rows = list(csv.DictReader(io.StringIO(result.stdout)))
+        self.assertEqual(rows[0]["path"], name)
+        self.assertEqual(json.loads(rows[0]["report_metadata"])["resolved_ref"], base)
+        history = self.cli("trace", name, "--csv")
+        row = list(csv.DictReader(io.StringIO(history.stdout)))[0]
+        self.assertEqual(row["message"], 'message, "quoted"')
+        self.assertEqual(json.loads(row["files"]), [name])
+        empty = self.cli("commits", base, base, "--csv")
+        row = list(csv.DictReader(io.StringIO(empty.stdout)))[0]
+        self.assertEqual(row["row_present"], "false")
+        self.assertEqual(json.loads(row["report_metadata"])["total_commits"], 0)
+        target = self.repo / "out.csv"
+        self.assertEqual(self.cli("files", "--csv", "--output", str(target)).returncode, 0)
+        self.assertIn(name, list(csv.DictReader(io.StringIO(target.read_text())))[0]["path"])
+        conflict = self.cli("--csv", "files", "--markdown")
+        self.assertEqual(conflict.returncode, 2)
+
+    def test_all_commands_offer_csv_rows(self):
+        self.write("a")
+        base = self.commit()
+        self.write("a", "one\ntwo\nthree\nfour\n")
+        self.commit()
+        for command in ("trace", "ancestry", "genemap", "bloodline", "diff", "authors", "hotspots", "owners", "timeline", "cochange", "files", "source", "doctor", "refs", "commits", "patch"):
+            args = [command, base, "HEAD"] if command in {"diff", "commits", "patch"} else [command] if command in {"hotspots", "timeline", "files", "doctor", "refs"} else [command, "a"]
+            for extra in ([[] , ["--summary"]] if command == "diff" else [[]]):
+                result = self.cli(*args, *extra, "--csv")
+                self.assertEqual(result.returncode, 0, result.stderr)
+                rows = list(csv.DictReader(io.StringIO(result.stdout)))
+                self.assertTrue(rows)
+                self.assertIn("report_metadata", rows[0])
+                json.loads(rows[0]["report_metadata"])
+
+    def test_csv_quotes_carriage_returns_in_raw_output(self):
+        name = "carriage\rreturn.txt"
+        self.write(name)
+        self.commit()
+        result = subprocess.run([sys.executable, "-m", "codegent.main", "--repo", str(self.repo), "files", "--csv"], cwd=ROOT, capture_output=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        rows = list(csv.DictReader(io.StringIO(result.stdout.decode("utf-8"), newline="")))
+        self.assertEqual(rows[0]["path"], name)

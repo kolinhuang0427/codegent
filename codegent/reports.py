@@ -100,7 +100,7 @@ def render_hotspots(report: dict[str, Any]) -> str:
 @safe_display
 def render_owners(report: dict[str, Any]) -> str:
     lines = [f"Line ownership: {report['path']} ({report['selected_lines']} lines)", "Lines  Percent  Author"]
-    lines.extend(f"{row['lines']:5}  {row['percentage']:6.2f}%  {row['author']}" for row in report["owners"])
+    lines.extend(f"{row['lines']:5}  {row['percentage']:6.2f}%  {row['author']}" + (f"  {row['commit']}" if "commit" in row else "") for row in report["owners"])
     lines.extend(f"Warning: {warning}" for warning in report.get("warnings", []))
     lines.append(report["attribution"])
     return "\n".join(lines) + "\n"
@@ -202,7 +202,7 @@ def render_cochange(report: dict[str, Any]) -> str:
 def render_files(report: dict[str, Any]) -> str:
     lines = [f"Tracked files: {report['path']} at {report['resolved_ref'][:12]}", "Mode  Type  Bytes  Path"]
     lines.extend(f"{row['mode']}  {row['type']}  {row['size'] if row['size'] is not None else '-'}  {row['path']}" for row in report["files"])
-    lines.append(f"Showing {len(report['files'])} of {report['total_files']} entries")
+    lines.append(f"Showing {len(report['files'])} of {report['matching_files']} matching entries ({report['total_files']} before kind filter)")
     return "\n".join(lines) + "\n"
 
 
