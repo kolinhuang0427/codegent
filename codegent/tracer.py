@@ -542,7 +542,7 @@ class GitTracer:
         return owners
 
     def patch(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None,
-              context: int = 3, max_bytes: int = 1048576, merge_base: bool = False) -> dict[str, Any]:
+              context: int = 3, max_bytes: int = 1048576, merge_base: bool = False, find_copies: bool = False) -> dict[str, Any]:
         positive_count(max_bytes, "max_bytes")
         if type(context) is not int or context < 0:
             raise GitError("patch context must be a nonnegative integer")
@@ -554,14 +554,20 @@ class GitTracer:
             base = self._merge_base(base, target)
         patch = self.git(["diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color",
                           "--src-prefix=a/", "--dst-prefix=b/", "--no-relative",
-                          f"--unified={context}", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected])
+                          f"--unified={context}", *self._diff_detection(find_copies), base, target, "--", *selected])
         size = len(patch.encode("utf-8", "surrogateescape"))
         if size > max_bytes:
             raise GitError(f"patch output exceeds --max-bytes={max_bytes}; narrow the comparison")
         return {"repo": self.repo, "commit_a": commit_a, "commit_b": commit_b,
-                "resolved_a": base, "resolved_b": target, "input_a_resolved": input_a_resolved, "merge_base": merge_base, "paths": selected, "context": context,
+                "resolved_a": base, "resolved_b": target, "input_a_resolved": input_a_resolved, "merge_base": merge_base, "find_copies": find_copies, "paths": selected, "context": context,
                 "size_bytes": size, "max_bytes": max_bytes, "ignore_whitespace": self.ignore_whitespace,
                 "rename_threshold": self.rename_threshold, "patch": patch}
+
+    def _diff_detection(self, find_copies: bool) -> list[str]:
+        flags = [f"--find-renames={self.rename_threshold}%"]
+        if find_copies:
+            flags.extend([f"--find-copies={self.rename_threshold}%", "--find-copies-harder"])
+        return flags
 
     def _merge_base(self, base: str, target: str) -> str:
         bases = self.git(["merge-base", "--all", base, target], check=False).splitlines()
@@ -579,9 +585,7 @@ class GitTracer:
         input_a_resolved = base
         if merge_base:
             base = self._merge_base(base, target)
-        detection = [f"--find-renames={self.rename_threshold}%"]
-        if find_copies:
-            detection.extend([f"--find-copies={self.rename_threshold}%", "--find-copies-harder"])
+        detection = self._diff_detection(find_copies)
         shared = ["diff", "--no-ext-diff", "--no-textconv", *detection]
         refs = [base, target, "--", *selected_paths]
         stat = self.git([*shared, "--stat", *refs])

@@ -368,3 +368,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `source FILE --lines START:END --context N` expands both sides of the requested range and clamps to the committed blob. Reports preserve the requested `line_range` and record `effective_line_range`, context, and byte budget. Context requires a line selection.
 
 `patch BASE TARGET --merge-base` previews target changes since the unique shared ancestor, using the same merge-base validation as `diff`. Reports retain the input base SHA and effective comparison base.
+
+`patch --find-copies` enables the same copy-detection threshold and unchanged-source search as `diff --find-copies`. Patch headers distinguish copied paths from renames; detection remains a Git similarity heuristic.

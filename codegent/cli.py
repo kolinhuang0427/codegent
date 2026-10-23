@@ -219,6 +219,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     patch.add_argument("--context", type=nonnegative_int, default=3)
     patch.add_argument("--max-bytes", type=positive_int, default=1048576)
     patch.add_argument("--merge-base", action="store_true", help="Preview target changes since the unique shared ancestor")
+    patch.add_argument("--find-copies", action="store_true", help="Detect copied blocks from unchanged source files")
     patch.set_defaults(handler=_cmd_patch)
 
     return parser
@@ -460,7 +461,7 @@ def _cmd_commits(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_patch(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).patch(args.base, args.target, paths=args.paths, context=args.context, max_bytes=args.max_bytes, merge_base=args.merge_base)
+    report = _tracer(args).patch(args.base, args.target, paths=args.paths, context=args.context, max_bytes=args.max_bytes, merge_base=args.merge_base, find_copies=args.find_copies)
     return report if args.json_output or args.markdown or args.csv_output else render_patch(report)
 
 

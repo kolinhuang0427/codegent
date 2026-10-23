@@ -212,3 +212,16 @@ class RoundFourTests(RepositoryCase):
         self.assertIn("b/side", report["patch"])
         self.assertNotIn("b/main", report["patch"])
         self.assertTrue(report["merge_base"])
+
+    def test_patch_copy_detection_reports_copy_provenance(self):
+        content = "original content\n" * 20
+        self.write("old", content)
+        base = self.commit()
+        self.write("new", content)
+        self.commit()
+        ordinary = self.payload("patch", base, "HEAD")
+        self.assertIn("new file mode", ordinary["patch"])
+        copied = self.payload("patch", base, "HEAD", "--find-copies")
+        self.assertIn("copy from old", copied["patch"])
+        self.assertIn("copy to new", copied["patch"])
+        self.assertTrue(copied["find_copies"])
