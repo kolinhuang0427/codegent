@@ -350,3 +350,5 @@ Repository-wide history and commit ranges include empty commits and merge commit
 History `--ignore-case` makes literal `--author` and `--grep` matching case-insensitive. It requires one of these filters and records the setting in selection metadata.
 
 History `--merges` selects commits with multiple parents; `--no-merges` excludes them. Merge selection is recorded separately from first-parent traversal, and scoped Git traversal can still omit merges unrelated to the path.
+
+`commits BASE TARGET --ancestry-path` keeps only commits descending from BASE and reachable from TARGET, excluding side history that forked before BASE. Merge-selection flags remain exclusive even when placed on opposite sides of the command name.

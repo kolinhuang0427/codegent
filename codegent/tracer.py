@@ -224,6 +224,7 @@ class GitTracer:
         first_parent: bool = False,
         newest_first: bool = False,
         exclude_ref: str | None = None,
+        ancestry_path: bool = False,
     ) -> Bloodline:
         positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
@@ -281,6 +282,11 @@ class GitTracer:
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits + 1}")
         args.append(resolved)
+        if ancestry_path and exclude_ref is None:
+            raise GitError("ancestry-path requires an excluded base ref")
+        if ancestry_path:
+            args.append("--ancestry-path")
+            selection["ancestry_path"] = True
         if exclude_ref is not None:
             excluded = self.resolve_ref(exclude_ref)
             selection.update(excluded_ref=exclude_ref, excluded_resolved=excluded)

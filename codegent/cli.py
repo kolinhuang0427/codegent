@@ -200,6 +200,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     commits.add_argument("base")
     commits.add_argument("target")
     commits.add_argument("--path", default=".", help="Optional literal file or directory scope")
+    commits.add_argument("--ancestry-path", action="store_true", help="Keep commits descending from BASE and reachable from TARGET")
     commits.set_defaults(handler=_cmd_commits)
 
     patch = subparsers.add_parser("patch", parents=[common], help="Preview a size-limited unified patch between revisions")
@@ -218,6 +219,8 @@ def main(argv: list[str] | None = None) -> int:
     option_tokens = tokens[:tokens.index("--")] if "--" in tokens else tokens
     parser = build_parser(json_errors="--json" in option_tokens)
     args = parser.parse_args(tokens)
+    if {"--merges", "--no-merges"} <= set(option_tokens):
+        parser.error("choose one of --merges and --no-merges")
     provided = set(vars(args))
     _apply_defaults(args)
     if sum((args.json_output, args.markdown, args.csv_output)) > 1:
@@ -441,7 +444,7 @@ def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_commits(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    history = _tracer(args).repository_history(args.path, args.target, exclude_ref=args.base, **_history_options(args))
+    history = _tracer(args).repository_history(args.path, args.target, exclude_ref=args.base, ancestry_path=args.ancestry_path, **_history_options(args))
     report = commit_range_report(history)
     return report if args.json_output or args.markdown or args.csv_output else render_commits(report)
 
