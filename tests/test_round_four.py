@@ -306,3 +306,14 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(second["line_ranges"], [[2, 2], [4, 4]])
         self.assertNotIn("line_ranges", self.payload("owners", "a")["owners"][0])
         self.assertEqual(self.cli("owners", "a", "--show-lines", "--markdown").returncode, 0)
+
+    def test_weekly_timeline_uses_utc_mondays_across_year_boundary(self):
+        self.write("a")
+        self.commit(env={"GIT_AUTHOR_DATE": "2024-12-31T00:00:00Z"})
+        self.write("a", "new\n")
+        self.commit(env={"GIT_AUTHOR_DATE": "2025-01-14T00:00:00Z"})
+        report = self.payload("timeline", "--period", "week", "--fill-gaps")
+        self.assertEqual([r["period"] for r in report["periods"]], ["2024-12-30", "2025-01-06", "2025-01-13"])
+        self.assertEqual([r["commits"] for r in report["periods"]], [1, 0, 1])
+        self.assertEqual(report["week_start"], "monday")
+        self.assertEqual(self.cli("timeline", "--period", "week", "--fill-gaps", "--max-periods", "2").returncode, 1)

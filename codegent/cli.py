@@ -167,7 +167,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author or committer date periods")
     timeline.add_argument("path", nargs="?", default=".")
     timeline.add_argument("--date-basis", choices=("author", "committer"), default="author")
-    timeline.add_argument("--period", choices=("day", "month", "year"), default="month")
+    timeline.add_argument("--period", choices=("day", "week", "month", "year"), default="month")
     timeline.add_argument("--fill-gaps", action="store_true", help="Include empty periods between observed dates")
     timeline.add_argument("--max-periods", type=positive_int, default=1000)
     timeline.set_defaults(handler=_cmd_timeline)
