@@ -7,6 +7,7 @@ import math
 import re
 import subprocess
 import signal
+import tempfile
 import sys
 from ._version import __version__
 from dataclasses import dataclass, field
@@ -122,7 +123,7 @@ class GitTracer:
         self.repo = os.path.realpath(os.path.expanduser(repo))
         self.path_base = self.repo
 
-    def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
+    def git(self, args: list[str], *, check: bool = True, text: bool = True, index_file: str | None = None) -> str:
         if self.ignore_whitespace and args and args[0] in ("log", "diff"):
             args = [args[0], "--ignore-all-space", *args[1:]]
         if self.mailmap and args and args[0] == "log":
@@ -133,6 +134,8 @@ class GitTracer:
         environment["GIT_OPTIONAL_LOCKS"] = "0"
         for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX"):
             environment.pop(key, None)
+        if index_file is not None:
+            environment["GIT_INDEX_FILE"] = index_file
         try:
             process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                                        env=environment, start_new_session=os.name == "posix")
@@ -458,6 +461,23 @@ class GitTracer:
                           "size": None if size == "-" else int(size)})
         return files
 
+    def _binary_attribute(self, resolved: str, path: str) -> bool:
+        # --cached plus a temporary index works on the supported Git 2.37+
+        # baseline without checking out files or changing the user's index.
+        with tempfile.TemporaryDirectory(prefix="codegent-attributes-") as folder:
+            index = os.path.join(folder, "index")
+            self.git(["read-tree", resolved], index_file=index)
+            fields = self.git(["check-attr", "--cached", "-z", "diff", "--", path], index_file=index).split("\0")
+        if len(fields) != 4 or fields[:2] != [path, "diff"]:
+            raise GitError("cannot parse Git binary attribute metadata")
+        attribute = fields[2]
+        if attribute == "unset":
+            return True
+        if attribute in {"set", "unspecified"}:
+            return False
+        driver = self.git(["config", "--type=bool", "--get", f"diff.{attribute}.binary"], check=False).strip()
+        return driver == "true"
+
     def _text_blob(self, resolved: str, path: str, *, max_bytes: int, purpose: str) -> tuple[str, int]:
         positive_count(max_bytes, "max_bytes")
         object_name = f"{resolved}:{path}"
@@ -471,6 +491,8 @@ class GitTracer:
             raise GitError("cannot parse Git object size") from exc
         if size > max_bytes:
             raise GitError(f"{purpose} blob exceeds --max-bytes={max_bytes}")
+        if self._binary_attribute(resolved, path):
+            raise GitError(f"{purpose} is unavailable for binary files (Git attributes)")
         content = self.git(["cat-file", "blob", object_name])
         if "\0" in content:
             raise GitError(f"{purpose} is unavailable for binary files")
@@ -605,7 +627,15 @@ class GitTracer:
             base = self._merge_base(base, target)
         patch = self.git(["diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color",
                           "--src-prefix=a/", "--dst-prefix=b/", "--no-relative",
-                          f"--unified={context}", *self._diff_detection(find_copies), base, target, "--", *selected])
+                          f"--unified={context}", *self._diff_detection(find_copies), base, target, "--", *([] if find_copies else selected)])
+        if find_copies and selected:
+            all_files = self.diff_lineage(base, target, find_copies=True).files
+            starts = [match.start() for match in re.finditer(r"^diff --git ", patch, re.MULTILINE)]
+            if len(starts) != len(all_files) or (starts and starts[0] != 0):
+                raise GitError("cannot align copy-aware patch sections with Git paths")
+            ends = starts[1:] + [len(patch)]
+            patch = "".join(patch[start:end] for item, start, end in zip(all_files, starts, ends)
+                            if self._matches_paths(item, selected))
         size = len(patch.encode("utf-8", "surrogateescape"))
         if size > max_bytes:
             raise GitError(f"patch output exceeds --max-bytes={max_bytes}; narrow the comparison")
@@ -649,6 +679,14 @@ class GitTracer:
             raise GitError("comparison requires exactly one merge base; choose explicit refs")
         return bases[0]
 
+    @staticmethod
+    def _matches_paths(item: dict[str, Any], paths: list[str]) -> bool:
+        candidates = [item["path"]]
+        if item.get("status") == "renamed":
+            candidates.append(item["renamed_from"])
+        return any(scope == "." or candidate == scope or candidate.startswith(scope + "/")
+                   for candidate in candidates for scope in paths)
+
     def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
         if statuses and any(status not in CHANGE_STATUSES for status in statuses):
@@ -661,11 +699,14 @@ class GitTracer:
             base = self._merge_base(base, target)
         detection = self._diff_detection(find_copies)
         shared = ["diff", "--no-ext-diff", "--no-textconv", *detection]
-        refs = [base, target, "--", *selected_paths]
+        refs = [base, target, "--", *([] if find_copies else selected_paths)]
         stat = self.git([*shared, "--stat", *refs])
         numstat = self.git([*shared, "--numstat", "-z", *refs])
         name_status = self.git([*shared, "--name-status", "-z", *refs])
         files = self._merge_diff_outputs(numstat, name_status)
+        if find_copies and selected_paths:
+            files = [item for item in files if self._matches_paths(item, selected_paths)]
+            stat = ""  # The unscoped source-pool statistic is not the requested output scope.
         total_changed_files = len(files)
         if selected_statuses:
             files = [item for item in files if item["status"] in selected_statuses]
