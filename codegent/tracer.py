@@ -6,6 +6,7 @@ import os
 import math
 import re
 import subprocess
+import signal
 import sys
 from ._version import __version__
 from dataclasses import dataclass, field
@@ -133,23 +134,40 @@ class GitTracer:
         for key in ("GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_COMMON_DIR", "GIT_PREFIX"):
             environment.pop(key, None)
         try:
-            result = subprocess.run(
-                cmd,
-                check=False,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=False,
-                timeout=self.timeout,
-                env=environment,
-            )
-        except subprocess.TimeoutExpired as exc:
-            raise GitExecutionError(f"git timed out after {self.timeout:g} seconds") from exc
+            process = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                                       env=environment, start_new_session=os.name == "posix")
+            try:
+                stdout, stderr = process.communicate(timeout=self.timeout)
+            except (subprocess.TimeoutExpired, OverflowError) as exc:
+                self._terminate_git(process)
+                message = ("git timeout exceeds the platform's supported range" if isinstance(exc, OverflowError)
+                           else f"git timed out after {self.timeout:g} seconds")
+                raise GitExecutionError(message) from exc
         except OSError as exc:
             raise GitExecutionError(f"cannot run git: {exc.strerror or exc}") from exc
-        if check and result.returncode != 0:
-            stderr = result.stderr.decode("utf-8", "replace").strip()
+        if check and process.returncode != 0:
+            stderr = stderr.decode("utf-8", "replace").strip()
             raise GitError(stderr or f"git command failed: {' '.join(cmd)}")
-        return result.stdout.decode("utf-8", "surrogateescape")
+        return stdout.decode("utf-8", "surrogateescape")
+
+    @staticmethod
+    def _terminate_git(process: subprocess.Popen) -> None:
+        try:
+            if os.name == "posix":
+                os.killpg(process.pid, signal.SIGKILL)
+            else:
+                process.kill()
+        except ProcessLookupError:
+            pass
+        try:
+            process.communicate(timeout=1)
+        except subprocess.TimeoutExpired:
+            # An independently detached helper may still own an output pipe.
+            # Do not let that pipe extend the direct process's timeout.
+            for stream in (process.stdout, process.stderr):
+                if stream:
+                    stream.close()
+            process.wait(timeout=1)
 
     def ensure_repository(self) -> None:
         if not os.path.isdir(self.repo):

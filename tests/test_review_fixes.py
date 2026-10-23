@@ -71,3 +71,29 @@ class ReviewFixTests(RepositoryCase):
             os.fchmod = original
         self.assertEqual(target.read_text(), "new\n")
         self.assertEqual(target.stat().st_mode & 0o777, 0o640)
+
+    @unittest.skipUnless(os.name == "posix", "POSIX process group coverage")
+    def test_timeout_terminates_git_helpers_in_the_same_process_group(self):
+        import shlex
+        import subprocess
+        pidfile = self.repo / "child.pid"
+        wrapper = self.repo / "git"
+        wrapper.write_text("#!/bin/sh\n/bin/sleep 20 &\necho $! > " + shlex.quote(str(pidfile)) + "\nwait\n")
+        wrapper.chmod(0o755)
+        result = self.cli("doctor", "--timeout", "1", "--json", env={"PATH": str(self.repo)})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("timed out", json.loads(result.stderr)["error"])
+        pid = int(pidfile.read_text())
+        status = subprocess.run(["/bin/ps", "-p", str(pid), "-o", "stat="], capture_output=True, text=True)
+        self.assertTrue(status.returncode != 0 or status.stdout.strip().startswith("Z"), status.stdout)
+
+    def test_platform_timeout_overflow_is_a_readable_git_error(self):
+        from unittest.mock import Mock
+        from codegent.tracer import GitExecutionError
+        process = Mock()
+        process.communicate.side_effect = OverflowError("timeout out of range")
+        tracer = GitTracer(str(self.repo), timeout=1000000000)
+        with patch("codegent.tracer.subprocess.Popen", return_value=process), patch.object(tracer, "_terminate_git") as stop:
+            with self.assertRaisesRegex(GitExecutionError, "supported range"):
+                tracer.git(["--version"])
+            stop.assert_called_once_with(process)
