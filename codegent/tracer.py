@@ -146,6 +146,9 @@ class GitTracer:
                 message = ("git timeout exceeds the platform's supported range" if isinstance(exc, OverflowError)
                            else f"git timed out after {self.timeout:g} seconds")
                 raise GitExecutionError(message) from exc
+            except BaseException:
+                self._terminate_git(process)
+                raise
         except OSError as exc:
             raise GitExecutionError(f"cannot run git: {exc.strerror or exc}") from exc
         if check and process.returncode != 0:
@@ -167,9 +170,12 @@ class GitTracer:
         except subprocess.TimeoutExpired:
             # An independently detached helper may still own an output pipe.
             # Do not let that pipe extend the direct process's timeout.
-            for stream in (process.stdout, process.stderr):
-                if stream:
-                    stream.close()
+            if os.name == "posix":
+                for stream in (process.stdout, process.stderr):
+                    if stream:
+                        stream.close()
+            # Windows communicate() owns buffered reader threads. Closing their
+            # streams here could wait indefinitely on a reader-held lock.
             process.wait(timeout=1)
 
     def ensure_repository(self) -> None:
@@ -197,7 +203,8 @@ class GitTracer:
         if not isinstance(path, str) or not path:
             raise GitError("path must be a nonempty string; use '.' for the repository")
         self.ensure_repository()
-        absolute = os.path.abspath(os.path.join(self.path_base, path))
+        raw_path = os.path.join(self.path_base, path)
+        absolute = os.path.abspath(raw_path)
 
         def inside(candidate: str) -> bool:
             try:
@@ -208,7 +215,7 @@ class GitTracer:
         if not inside(absolute):
             # Map external aliases, preserving tracked symlink components below
             # the outermost alias into the repository or one of its subtrees.
-            ancestor, alias = absolute, None
+            ancestor, alias = raw_path, None
             while True:
                 resolved = os.path.realpath(ancestor)
                 if inside(resolved):
@@ -219,7 +226,9 @@ class GitTracer:
                 ancestor = parent
             if alias is None:
                 raise GitError(f"path is outside the repository: {path!r}")
-            absolute = os.path.join(alias[1], os.path.relpath(absolute, alias[0]))
+            absolute = os.path.abspath(os.path.join(alias[1], os.path.relpath(raw_path, alias[0])))
+            if not inside(absolute):
+                raise GitError(f"path is outside the repository: {path!r}")
         return os.path.relpath(absolute, self.repo).replace(os.sep, "/")
 
     def list_reachable_commits(self, ref: str = "HEAD", path: str | None = None) -> list[str]:
@@ -277,11 +286,11 @@ class GitTracer:
             raise GitError("path is a directory; use hotspots for directory activity")
 
         selection: dict[str, Any] = {}
-        if since:
+        if since is not None:
             selection["since"] = iso_date(since)
-        if until:
+        if until is not None:
             selection["until"] = iso_date(until)
-        if since and until and selection["since"] > selection["until"]:
+        if since is not None and until is not None and selection["since"] > selection["until"]:
             raise GitError("--since must not be later than --until")
         args = [
             "log",
@@ -294,6 +303,7 @@ class GitTracer:
             "--numstat",
             f"--find-renames={self.rename_threshold}%",
         ]
+        match_flags: list[str] = []
         if self.rename_threshold != 50:
             selection["rename_threshold"] = self.rename_threshold
         if self.ignore_whitespace:
@@ -301,7 +311,7 @@ class GitTracer:
         if merge_filter not in {None, "merges", "no-merges"}:
             raise GitError("merge filter must be merges or no-merges")
         if merge_filter:
-            args.append("--" + merge_filter)
+            match_flags.append("--" + merge_filter)
             selection["merge_filter"] = merge_filter
         if first_parent:
             args.append("--first-parent")
@@ -311,19 +321,22 @@ class GitTracer:
         elif follow is False:
             selection["follow"] = False
         if ignore_case:
-            args.append("--regexp-ignore-case")
+            match_flags.append("--regexp-ignore-case")
             selection["ignore_case"] = True
         if grep:
             selection["grep"] = grep
-            args.extend(["--fixed-strings", f"--grep={grep}"])
+            match_flags.extend(["--fixed-strings", f"--grep={grep}"])
         if author:
             selection["author"] = author
-            args.extend(["--fixed-strings", f"--author={author}"])
-        if since:
-            args.append(f"--since-as-filter={selection['since']}")
-        if until:
-            args.append(f"--until={selection['until']}")
-        if max_commits is not None and max_commits > 0:
+            match_flags.extend(["--fixed-strings", f"--author={author}"])
+        if since is not None:
+            match_flags.append(f"--since-as-filter={selection['since']}")
+        if until is not None:
+            match_flags.append(f"--until={selection['until']}")
+        filtered_follow = bool(follow and match_flags)
+        if not filtered_follow:
+            args.extend(match_flags)
+        if max_commits is not None and not filtered_follow:
             args.append(f"--max-count={max_commits + 1}")
         args.append(resolved)
         if ancestry_path and exclude_ref is None:
@@ -341,6 +354,18 @@ class GitTracer:
 
         output = self.git(args)
         newest_commits = self._parse_log(output)
+        if filtered_follow:
+            query = ["log", "--no-notes", "--format=%H", *match_flags]
+            if first_parent:
+                query.append("--first-parent")
+            query.append(resolved)
+            if exclude_ref is not None:
+                query.append("^" + selection["excluded_resolved"])
+            if ancestry_path:
+                query.append("--ancestry-path")
+            query.append("--")
+            selected_ids = set(self.git(query).splitlines())
+            newest_commits = [commit for commit in newest_commits if commit.hash in selected_ids]
         truncated = max_commits is not None and len(newest_commits) > max_commits
         if truncated:
             newest_commits = newest_commits[:max_commits]

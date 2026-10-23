@@ -63,14 +63,17 @@ class ReviewFixTests(RepositoryCase):
         target = self.repo / "out.txt"
         target.write_text("old")
         os.chmod(target, 0o640)
-        original = os.fchmod
-        del os.fchmod
+        original = getattr(os, "fchmod", None)
+        if original is not None:
+            del os.fchmod
         try:
             _write_output("new", str(target))
         finally:
-            os.fchmod = original
+            if original is not None:
+                os.fchmod = original
         self.assertEqual(target.read_text(), "new\n")
-        self.assertEqual(target.stat().st_mode & 0o777, 0o640)
+        if os.name == "posix":
+            self.assertEqual(target.stat().st_mode & 0o777, 0o640)
 
     @unittest.skipUnless(os.name == "posix", "POSIX process group coverage")
     def test_timeout_terminates_git_helpers_in_the_same_process_group(self):
@@ -212,3 +215,57 @@ class ReviewFixTests(RepositoryCase):
         patch = self.payload("patch", base, "HEAD", "--path", "dst", "--find-copies")["patch"]
         self.assertIn("copy from", patch)
         self.assertIn("old\\nname", patch)
+
+    def test_followed_history_filters_do_not_hide_an_excluded_rename(self):
+        self.write("old.py")
+        original = self.commit("original marker", env={"GIT_AUTHOR_DATE": "2024-01-01T00:00:00Z", "GIT_COMMITTER_DATE": "2024-01-01T00:00:00Z"})
+        self.git("mv", "old.py", "new.py")
+        renamed = self.commit("rename", env={"GIT_AUTHOR_NAME": "Renamer", "GIT_AUTHOR_EMAIL": "rename@example.test", "GIT_AUTHOR_DATE": "2024-02-01T00:00:00Z", "GIT_COMMITTER_DATE": "2024-02-01T00:00:00Z"})
+        for options in (("--until", "2024-01-15"), ("--author", "First Author"), ("--grep", "original marker")):
+            report = self.payload("trace", "new.py", *options, "--max-commits", "1")
+            self.assertEqual([c["hash"] for c in report["commits"]], [original])
+            self.assertEqual(report["genes"][0]["path"], "old.py")
+            self.assertFalse(report["origin_confirmed"])
+        conflict = self.cli("trace", "new.py", original, "--ref", "HEAD", "--json")
+        self.assertEqual(conflict.returncode, 1)
+        self.assertIn("conflicting refs", json.loads(conflict.stderr)["error"])
+        self.assertEqual(self.cli("trace", "new.py", renamed, "--ref", "HEAD").returncode, 1)
+
+    def test_empty_date_filters_are_invalid(self):
+        self.write("a")
+        self.commit()
+        for flag in ("--since", "--until"):
+            result = self.cli("trace", "a", flag, "", "--json")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("invalid ISO date", json.loads(result.stderr)["error"])
+
+    def test_external_alias_parent_components_resolve_inside_repo(self):
+        self.write("src/a")
+        self.write("README")
+        self.commit()
+        with tempfile.TemporaryDirectory() as folder:
+            alias = Path(folder) / "alias"
+            os.symlink(self.repo / "src", alias)
+            report = self.payload("trace", str(alias / ".." / "README"))
+            self.assertEqual(report["path"], "README")
+
+    def test_interrupt_cleans_up_git_before_reraising(self):
+        from unittest.mock import Mock
+        process = Mock()
+        process.communicate.side_effect = KeyboardInterrupt
+        tracer = GitTracer(str(self.repo))
+        with patch("codegent.tracer.subprocess.Popen", return_value=process), patch.object(tracer, "_terminate_git") as stop:
+            with self.assertRaises(KeyboardInterrupt):
+                tracer.git(["--version"])
+            stop.assert_called_once_with(process)
+
+    def test_windows_timeout_cleanup_does_not_close_active_buffered_readers(self):
+        import subprocess
+        from unittest.mock import Mock
+        process = Mock()
+        process.communicate.side_effect = subprocess.TimeoutExpired("git", 1)
+        with patch("codegent.tracer.os.name", "nt"):
+            GitTracer._terminate_git(process)
+        process.kill.assert_called_once()
+        process.stdout.close.assert_not_called()
+        process.stderr.close.assert_not_called()
