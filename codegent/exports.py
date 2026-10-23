@@ -33,7 +33,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
                   f"matching: {report['matching_authors']}; omitted: {report['omitted_authors']}.",
                   f"Grouping: {_cell(report['group_by'])}; minimum commits: {report['min_commits']}."]
     elif command == "hotspots":
-        lines += _table(["Path", "Commits", "Churn", "Binary changes"], [
+        lines += _table(["Path", "Commits", "Authors", "Churn", "Last changed", "Binary changes"], [
             [row[key] for key in ("path", "commits", "churn", "binary_changes")]
             for row in report["files"]])
         lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching paths.",

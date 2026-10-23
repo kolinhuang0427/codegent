@@ -146,7 +146,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     hotspots.add_argument("path", nargs="?", default=".")
     hotspots.add_argument("--current-only", action="store_true", help="Keep only paths present at the selected tip")
     hotspots.add_argument("--exclude", action="append", default=[], help="Exclude a root-relative path glob (repeatable)")
-    hotspots.add_argument("--sort", choices=("churn", "commits"), default="churn")
+    hotspots.add_argument("--sort", choices=("churn", "commits", "authors", "recent"), default="churn")
     hotspots.add_argument("--limit", type=positive_int, default=20)
     hotspots.add_argument("--min-commits", type=positive_int, default=1)
     hotspots.set_defaults(handler=_cmd_hotspots)

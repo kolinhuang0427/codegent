@@ -61,37 +61,47 @@ def render_authors(report: dict[str, Any]) -> str:
 def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1, excludes: list[str] | None = None, current_paths: set[str] | None = None) -> dict[str, Any]:
     positive_count(limit, "limit")
     positive_count(min_commits, "min_commits")
-    if sort not in {"commits", "churn"}:
-        raise GitError("invalid hotspot sort; choose commits or churn")
+    if sort not in {"commits", "churn", "authors", "recent"}:
+        raise GitError("invalid hotspot sort; choose commits, churn, authors, or recent")
     files: dict[str, dict[str, Any]] = {}
     for commit in history.commits:
         for item in commit.changes:
             row = files.setdefault(item["path"], {
                 "path": item["path"], "commits": 0, "additions": 0, "deletions": 0, "binary_changes": 0,
+                "authors": set(), "first_changed": iso_date(commit.committer_date or commit.date),
+                "last_changed": iso_date(commit.committer_date or commit.date),
             })
             row["commits"] += 1
             row["additions"] += item["additions"]
             row["deletions"] += item["deletions"]
             row["binary_changes"] += int(item["binary"])
+            row["authors"].add(commit.author)
+            changed = iso_date(commit.committer_date or commit.date)
+            row["first_changed"] = min(row["first_changed"], changed)
+            row["last_changed"] = max(row["last_changed"], changed)
     for row in files.values():
+        row["authors"] = len(row["authors"])
         row["churn"] = row["additions"] + row["deletions"]
     rows = sorted((row for row in files.values() if row["commits"] >= min_commits
                    and (current_paths is None or row["path"] in current_paths)
                    and not any(fnmatchcase(row["path"], pattern) for pattern in (excludes or []))),
-                  key=lambda row: (-row[sort], row["path"]))
+                  key=lambda row: (0 if sort == "recent" else -row[sort], row["path"]))
+    if sort == "recent":
+        rows.sort(key=lambda row: row["last_changed"], reverse=True)
     return {
         "repo": history.repo, "path": history.path, "requested_ref": history.requested_ref, "resolved_ref": history.resolved_ref,
         "history_complete": history.history_complete, "warnings": history.warnings,
         "selection": history.selection, "scanned_commits": len(history.commits),
         "matching_files": len(rows), "files": rows[:limit], "sort": sort, "excludes": excludes or [], "current_only": current_paths is not None,
+        "date_basis": "UTC committer dates within selected history",
         "path_policy": "historical names are counted separately across renames",
     }
 
 
 @safe_display
 def render_hotspots(report: dict[str, Any]) -> str:
-    lines = [f"Hotspots: {report['path']}", "Churn  Commits  Path"]
-    lines.extend(f"{row['churn']:5}  {row['commits']:7}  {row['path']}" for row in report["files"])
+    lines = [f"Hotspots: {report['path']}", "Churn  Commits  Authors  Last changed  Path"]
+    lines.extend(f"{row['churn']:5}  {row['commits']:7}  {row['authors']:7}  {row['last_changed']}  {row['path']}" for row in report["files"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     lines.append(report["path_policy"])
     return "\n".join(lines) + "\n"
