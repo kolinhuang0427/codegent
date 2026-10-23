@@ -269,3 +269,43 @@ class ReviewFixTests(RepositoryCase):
         process.kill.assert_called_once()
         process.stdout.close.assert_not_called()
         process.stderr.close.assert_not_called()
+
+    def test_common_emoji_clusters_align_without_splitting(self):
+        from codegent.display import display_width, truncate_cells
+        for text in ("©️", "👩‍💻", "👍🏽", "🇨🇦", "1️⃣"):
+            self.assertEqual(display_width(text), 2, text)
+        self.assertEqual(display_width("e\u0301"), 1)
+        self.assertEqual(truncate_cells("👩‍💻abcd", 5), "👩‍💻...")
+        self.write("a")
+        self.commit("©️ and 👩‍💻", env={"GIT_AUTHOR_NAME": "👩‍💻 Developer"})
+        result = self.cli("trace", "a", "--no-color")
+        rows = [line for line in result.stdout.splitlines() if line.startswith(("  ╭", "  │", "  ╰"))]
+        self.assertEqual(len({display_width(line) for line in rows}), 1)
+
+    def test_directional_marks_are_inert_in_human_output(self):
+        text = "a\u200e\u200f\u061c"
+        self.write("a")
+        self.commit(text)
+        result = self.cli("trace", "a", "--no-color")
+        for mark in ("\u200e", "\u200f", "\u061c"):
+            self.assertNotIn(mark, result.stdout)
+        self.assertIn("\\u200e", result.stdout)
+        self.assertEqual(self.payload("trace", "a")["commits"][0]["message"], text)
+
+    def test_diff_statistics_keep_structural_newlines(self):
+        self.write("a")
+        self.write("b")
+        base = self.commit()
+        self.write("a", "changed a\n")
+        self.write("b", "changed b\n")
+        self.commit()
+        result = self.cli("diff", base, "HEAD", "--no-color")
+        self.assertEqual(len([line for line in result.stdout.splitlines() if " | " in line]), 2)
+        self.assertNotIn("\\n", result.stdout)
+
+    def test_gene_map_labels_filtered_history_boundaries(self):
+        self.write("a")
+        self.commit()
+        result = self.cli("genemap", "a", "--author", "First", "--no-color")
+        self.assertIn("history boundary", result.stdout)
+        self.assertIn("?", result.stdout)
