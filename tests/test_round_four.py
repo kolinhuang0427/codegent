@@ -331,3 +331,81 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(selected["periods"][0]["cumulative_additions"], 1)
         for flag in ("--markdown", "--no-color", "--csv"):
             self.assertEqual(self.cli("timeline", "--cumulative", flag).returncode, 0)
+
+    def test_hotspots_rank_by_unique_authors_or_latest_committer_date(self):
+        self.write("a")
+        self.write("b")
+        self.commit(env={"GIT_COMMITTER_DATE": "2024-01-01T00:00:00Z"})
+        self.write("a", "changed a\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test", "GIT_COMMITTER_DATE": "2024-01-02T00:00:00Z"})
+        self.write("b", "changed b\n")
+        self.commit(env={"GIT_COMMITTER_DATE": "2024-01-03T00:00:00Z"})
+        authors = self.payload("hotspots", "--sort", "authors")
+        self.assertEqual(authors["files"][0]["path"], "a")
+        self.assertEqual(authors["files"][0]["authors"], 2)
+        recent = self.payload("hotspots", "--sort", "recent")
+        self.assertEqual(recent["files"][0]["path"], "b")
+        self.assertEqual(recent["files"][0]["last_changed"], "2024-01-03T00:00:00+00:00")
+        self.assertEqual(recent["files"][0]["first_changed"], "2024-01-01T00:00:00+00:00")
+        md = self.cli("hotspots", "--sort", "authors", "--markdown")
+        self.assertEqual(md.returncode, 0, md.stderr)
+        table = [line for line in md.stdout.splitlines() if line.startswith("|")]
+        self.assertTrue(all(line.count("|") == 7 for line in table))
+        self.assertIn("2024-01-02T00:00:00+00:00", md.stdout)
+
+    def test_csv_delimiters_preserve_quoted_values_and_metadata(self):
+        name = 'semi;tab\tcomma,quote".txt'
+        self.write(name)
+        self.commit()
+        for option, delimiter in (("comma", ","), ("semicolon", ";"), ("tab", "\t")):
+            result = self.cli("files", "--csv", "--csv-delimiter", option)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            rows = list(csv.DictReader(io.StringIO(result.stdout), delimiter=delimiter))
+            self.assertEqual(rows[0]["path"], name)
+            self.assertEqual(json.loads(rows[0]["report_metadata"])["total_files"], 1)
+            destination = self.repo / (option + ".export")
+            self.assertEqual(self.cli("files", "--csv", "--csv-delimiter", option, "--output", str(destination)).returncode, 0)
+            with destination.open(newline="") as stream:
+                self.assertEqual(next(csv.DictReader(stream, delimiter=delimiter))["path"], name)
+        self.assertEqual(self.cli("files", "--csv-delimiter", "tab").returncode, 2)
+        self.assertEqual(self.cli("files", "--csv", "--csv-delimiter", "invalid").returncode, 2)
+
+    def test_divergence_discloses_shallow_boundaries(self):
+        import tempfile
+        self.write("a")
+        self.commit()
+        self.write("a", "new\n")
+        self.commit()
+        with tempfile.TemporaryDirectory() as parent:
+            clone = Path(parent) / "shallow"
+            subprocess.run(["git", "clone", "--depth", "1", self.repo.as_uri(), str(clone)], check=True, capture_output=True)
+            report = self.payload("divergence", "HEAD", "HEAD", "--repo", str(clone))
+            self.assertTrue(report["shallow"])
+            self.assertFalse(report["history_complete"])
+            self.assertTrue(report["warnings"])
+            self.assertEqual(report["shared_commits"], 1)
+
+    def test_inventory_and_size_filters_disclose_unknown_gitlink_sizes(self):
+        self.write("a", "abc")
+        tip = self.commit()
+        self.git("update-index", "--add", "--cacheinfo", f"160000,{tip},module")
+        self.git("commit", "-m", "gitlink")
+        report = self.payload("inventory")
+        self.assertEqual(report["total_entries"], 2)
+        self.assertEqual(report["unknown_size_entries"], 1)
+        self.assertEqual(report["known_bytes"], 3)
+        bounded = self.payload("files", "--min-bytes", "0")
+        self.assertEqual(bounded["matching_files"], 1)
+        self.assertEqual(bounded["files"][0]["path"], "a")
+
+    def test_divergence_recognizes_disconnected_histories(self):
+        self.write("a")
+        self.commit()
+        self.git("checkout", "--orphan", "unrelated")
+        self.git("rm", "-rf", ".")
+        self.write("b")
+        self.commit()
+        report = self.payload("divergence", "main", "unrelated")
+        self.assertEqual(report["relationship"], "unrelated")
+        self.assertEqual(report["shared_commits"], 0)
+        self.assertEqual(report["merge_bases"], [])

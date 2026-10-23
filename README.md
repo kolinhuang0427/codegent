@@ -186,7 +186,7 @@ Owners reports disclose shallow-clone blame boundaries and support
 cannot inject formatting into structured history parsing.
 
 CI exercises the real-repository suite on Linux and macOS with Python 3.10 and
-3.12, then builds a wheel and runs all sixteen installed commands in text, JSON,
+3.12, then builds a wheel and runs all nineteen installed commands in text, JSON,
 Markdown, and CSV outside the checkout. To repeat the installed-package check locally:
 
 ```bash
@@ -327,7 +327,7 @@ semantics regardless of the display basis.
 
 ### CSV exports
 
-All 16 commands accept `--csv`, including `--output FILE` and `--no-clobber`.
+All 19 commands accept `--csv`, including `--output FILE` and `--no-clobber`.
 CSV uses standard quoted fields, preserving commas, quotes, Unicode, and embedded
 newlines. Lists, objects, booleans, and null values use JSON cells. History views
 export commit rows; other commands export their principal table, patch text, or
@@ -384,3 +384,18 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `timeline --period week` buckets normalized UTC dates into Monday-start weeks labeled by the Monday date. Gap filling advances seven days and handles calendar-year boundaries without week-number ambiguity.
 
 `timeline --cumulative` adds running commit, addition, deletion, and binary-change totals in displayed period order. Totals start at the selected history boundary and carry across empty periods; they are selected diff counts, not surviving-line measurements.
+
+Hotspots report distinct authors plus first/last changed UTC committer dates within selected history. `hotspots --sort authors|recent` ranks broad contributor activity or the latest observed change. Historical names stay separate; filters and truncation still bound the evidence.
+
+### Version 0.5.0
+
+All 19 commands support terminal text, JSON, Markdown, and CSV. `--csv-delimiter
+comma|tab|semicolon` changes the CSV field separator and requires `--csv`.
+Quoting, embedded newlines, nested JSON cells, metadata, and empty-table markers
+follow the same contract for all separators. Tab-separated output is available
+without changing the report schema. Git objects and the repository stay read-only.
+
+This version adds directory history, complete committed-tree inventory summaries,
+and branch divergence, plus the history/ref/file/source/blame/timeline controls
+listed above. CI exercises source tests and all 19 installed commands outside
+the checkout on Linux/macOS with Python 3.10/3.12. The package remains dependency-free.

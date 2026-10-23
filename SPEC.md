@@ -26,6 +26,9 @@ Python CLI. Python 3.10+ and Git 2.37+ are required. The console entry point is
 | refs | Local branches, remote-tracking refs and tags, with peeled tag metadata |
 | commits | Target-reachable commits excluding base ancestry, with immutable resolved bounds |
 | patch | Bounded unified diff preview between two commits, optionally scoped to literal paths |
+| directories | Historical commits, authors, paths and churn grouped by directory depth |
+| inventory | Complete committed-tree object sizes grouped by extension or directory |
+| divergence | Shared/unique reachable commit counts, merge bases, and revision relationship |
 
 ## History selection
 
@@ -105,7 +108,7 @@ No-clobber file creation is atomic, and replacing a regular file preserves its
 access permission bits. Special mode bits are not copied. Diagnostics omit remote
 URLs and account credentials. Unsupported command/option combinations fail.
 
-The installed-wheel smoke check exercises all sixteen commands in text, JSON,
+The installed-wheel smoke check exercises all nineteen commands in text, JSON,
 Markdown, and CSV. CI repeats source and installed checks on Linux/macOS Python
 3.10/3.12, cancelling superseded runs for the same ref.
 
@@ -133,3 +136,39 @@ strings and numbers remain native cells. Empty tables preserve metadata in one
 row with `row_present=false`; this is not an observation. Data rows use true.
 CSV quoting preserves raw values including newlines. JSON, CSV and Markdown
 formats are mutually exclusive. File output uses the same atomic/no-clobber path.
+
+## Version 0.5 controls
+
+Repository-wide history includes empty commits and merges; literal path scopes use
+Git path-limited traversal. History supports merge/non-merge selection and
+case-insensitive literal author/message filters. Commit ranges optionally keep
+only ancestry paths descending from the base. All active filters are disclosed.
+
+Ref inventories support containment, exact commit labels, version/creator-date
+sorting, and OR-ed short-name globs before limits. Tree listings support inclusive
+known-byte bounds and include/exclude path globs before sorting/limiting. Source
+context expands a valid requested range within the blob; the byte cap still
+applies before selecting lines. Patches support merge bases and copy detection,
+with explicit a/b prefixes independent of diff display configuration.
+
+Ownership resets implicitly configured ignored revisions, though Git validates
+configured ignore files when loading configuration. Explicit ignored-revision
+files remain supported. Ownership ranking/limits preserve the selected-line
+percentage denominator and disclose omitted lines. Optional inclusive line ranges
+refer to final-file numbers at the pinned revision.
+
+Directory activity counts a commit once per historical destination directory.
+Inventory aggregates a complete tree, preserving unknown sizes, before limiting
+groups; bytes are Git object sizes, not filesystem usage. Divergence compares
+pinned tips without fetching and discloses shallow-boundary limits.
+
+Weekly timelines start on Monday in UTC and use Monday-date labels. Cumulative
+commit/diff counts start within the selected history and carry through empty
+periods. Hotspots add distinct author counts and observed first/last UTC committer
+dates; authors/recent sorting remains bounded by the selected history.
+
+CSV accepts comma, tab, or semicolon separators using standard CRLF quoting for
+embedded newlines. The alternate separator option requires CSV output and retains
+the same metadata, nested-cell, and empty-table contract. All nineteen commands
+have installed-package checks in text, JSON, Markdown, and CSV; CSV is exercised
+with all three separators. Development version is 0.5.0.

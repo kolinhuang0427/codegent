@@ -33,8 +33,8 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
                   f"matching: {report['matching_authors']}; omitted: {report['omitted_authors']}.",
                   f"Grouping: {_cell(report['group_by'])}; minimum commits: {report['min_commits']}."]
     elif command == "hotspots":
-        lines += _table(["Path", "Commits", "Churn", "Binary changes"], [
-            [row[key] for key in ("path", "commits", "churn", "binary_changes")]
+        lines += _table(["Path", "Commits", "Authors", "Churn", "Last changed", "Binary changes"], [
+            [row[key] for key in ("path", "commits", "authors", "churn", "last_changed", "binary_changes")]
             for row in report["files"]])
         lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching paths.",
                   _cell(report["path_policy"])]
@@ -123,7 +123,7 @@ _CSV_TABLES = {
 }
 
 
-def render_csv(report: dict[str, Any], command: str) -> str:
+def render_csv(report: dict[str, Any], command: str, *, delimiter: str = ",") -> str:
     """Export rows without losing the report's scope, evidence, or empty state.
 
     Nested values use JSON cells; null is JSON null, distinguishable from empty
@@ -133,6 +133,8 @@ def render_csv(report: dict[str, Any], command: str) -> str:
     import io
     import json
 
+    if delimiter not in {",", ";", "\t"}:
+        raise ValueError("CSV delimiter must be comma, semicolon, or tab")
     metadata = dict(report)
     if command == "doctor":
         rows = [{"check": key, "value": value} for key, value in report.items()]
@@ -150,7 +152,7 @@ def render_csv(report: dict[str, Any], command: str) -> str:
         columns = list(schema)
     columns.extend(sorted({key for row in rows for key in row} - set(columns)))
     output = io.StringIO(newline="")
-    writer = csv.writer(output, lineterminator="\r\n")
+    writer = csv.writer(output, delimiter=delimiter, lineterminator="\r\n")
     writer.writerow(["row_present", *columns, "report_metadata"])
     encoded_metadata = json.dumps(metadata, ensure_ascii=True, sort_keys=True, separators=(",", ":"))
 

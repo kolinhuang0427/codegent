@@ -81,6 +81,16 @@ def main() -> None:
         checked.append("commits")
         assert "+four" in report("patch", base, "HEAD")["patch"]
         checked.append("patch")
+        assert report("directories")["total_directories"] == 1
+        checked.append("directories")
+        assert report("inventory")["total_entries"] == 2
+        checked.append("inventory")
+        assert report("divergence", base, "HEAD")["relationship"] == "base-ancestor"
+        checked.append("divergence")
+        assert report("owners", name, "--show-lines", "--limit", "1")["omitted_lines"] == 1
+        weekly = report("timeline", "--period", "week", "--fill-gaps", "--cumulative")
+        assert weekly["periods"][-1]["cumulative_commits"] == 2
+        assert report("refs", "--points-at", "HEAD", "--match", "main")["total_refs"] == 1
         assert report("files", "--sort", "size", "--kind", "file")["matching_files"] == 2
         assert report("timeline", "--fill-gaps", "--date-basis", "committer")["fill_gaps"]
         assert report("owners", name, "--group-by", "commit")["group_by"] == "commit"
@@ -99,15 +109,18 @@ def main() -> None:
             raise AssertionError("no-clobber replaced an existing export")
         assert target.read_text() == saved
         for command in checked:
-            arguments = [command, base, "HEAD"] if command in {"diff", "commits", "patch"} else [command] if command in {"hotspots", "timeline", "files", "doctor", "refs"} else [command, name]
+            arguments = [command, base, "HEAD"] if command in {"diff", "commits", "patch", "divergence"} else [command] if command in {"hotspots", "timeline", "files", "doctor", "refs", "directories", "inventory"} else [command, name]
             assert invoke(*arguments, "--markdown").startswith(f"# codegent {command}")
             assert invoke(*arguments, "--no-color").strip()
             rows = list(csv.DictReader(io.StringIO(invoke(*arguments, "--csv"))))
             assert rows and "report_metadata" in rows[0]
             json.loads(rows[0]["report_metadata"])
+            for option, delimiter in (("tab", "\t"), ("semicolon", ";")):
+                separated = list(csv.DictReader(io.StringIO(invoke(*arguments, "--csv", "--csv-delimiter", option)), delimiter=delimiter))
+                assert separated and "report_metadata" in separated[0]
         print(json.dumps({"version": invoke("--version").strip(), "installed_executable": executable,
                           "commands_verified": checked, "formats": ["text", "json", "markdown", "csv"],
-                          "atomic_file_export": True}, indent=2))
+                          "csv_delimiters": ["comma", "tab", "semicolon"], "atomic_file_export": True}, indent=2))
 
 
 if __name__ == "__main__":
