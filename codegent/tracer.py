@@ -441,8 +441,11 @@ class GitTracer:
             raise GitError(f"{purpose} is unavailable for binary files")
         return content, size
 
-    def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576) -> dict[str, Any]:
+    def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576, context: int = 0) -> dict[str, Any]:
         positive_count(max_bytes, "max_bytes")
+        nonnegative_count(context, "context")
+        if context and not lines:
+            raise GitError("source context requires --lines")
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
         content, size = self._text_blob(resolved, path, max_bytes=max_bytes, purpose="source preview")
@@ -458,9 +461,11 @@ class GitTracer:
             start, end = map(int, match.groups())
             if start > end or end > len(file_lines):
                 raise GitError("line range is outside the file")
+        start, end = max(1, start - context), min(len(file_lines), end + context)
         selected = file_lines[start - 1:end]
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
-                "size": size, "file_lines": len(file_lines), "line_range": lines,
+                "size": size, "max_bytes": max_bytes, "file_lines": len(file_lines), "line_range": lines,
+                "context": context, "effective_line_range": f"{start}:{end}" if file_lines else None,
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 
@@ -537,23 +542,38 @@ class GitTracer:
         return owners
 
     def patch(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None,
-              context: int = 3, max_bytes: int = 1048576) -> dict[str, Any]:
+              context: int = 3, max_bytes: int = 1048576, merge_base: bool = False, find_copies: bool = False) -> dict[str, Any]:
         positive_count(max_bytes, "max_bytes")
         if type(context) is not int or context < 0:
             raise GitError("patch context must be a nonnegative integer")
         self.ensure_repository()
         selected = [self.normalize_path(path) for path in (paths or [])]
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
+        input_a_resolved = base
+        if merge_base:
+            base = self._merge_base(base, target)
         patch = self.git(["diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color",
                           "--src-prefix=a/", "--dst-prefix=b/", "--no-relative",
-                          f"--unified={context}", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected])
+                          f"--unified={context}", *self._diff_detection(find_copies), base, target, "--", *selected])
         size = len(patch.encode("utf-8", "surrogateescape"))
         if size > max_bytes:
             raise GitError(f"patch output exceeds --max-bytes={max_bytes}; narrow the comparison")
         return {"repo": self.repo, "commit_a": commit_a, "commit_b": commit_b,
-                "resolved_a": base, "resolved_b": target, "paths": selected, "context": context,
+                "resolved_a": base, "resolved_b": target, "input_a_resolved": input_a_resolved, "merge_base": merge_base, "find_copies": find_copies, "paths": selected, "context": context,
                 "size_bytes": size, "max_bytes": max_bytes, "ignore_whitespace": self.ignore_whitespace,
                 "rename_threshold": self.rename_threshold, "patch": patch}
+
+    def _diff_detection(self, find_copies: bool) -> list[str]:
+        flags = [f"--find-renames={self.rename_threshold}%"]
+        if find_copies:
+            flags.extend([f"--find-copies={self.rename_threshold}%", "--find-copies-harder"])
+        return flags
+
+    def _merge_base(self, base: str, target: str) -> str:
+        bases = self.git(["merge-base", "--all", base, target], check=False).splitlines()
+        if len(bases) != 1:
+            raise GitError("comparison requires exactly one merge base; choose explicit refs")
+        return bases[0]
 
     def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
@@ -564,13 +584,8 @@ class GitTracer:
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
         input_a_resolved = base
         if merge_base:
-            bases = self.git(["merge-base", "--all", base, target], check=False).splitlines()
-            if len(bases) != 1:
-                raise GitError("comparison requires exactly one merge base; choose explicit refs")
-            base = bases[0]
-        detection = [f"--find-renames={self.rename_threshold}%"]
-        if find_copies:
-            detection.extend([f"--find-copies={self.rename_threshold}%", "--find-copies-harder"])
+            base = self._merge_base(base, target)
+        detection = self._diff_detection(find_copies)
         shared = ["diff", "--no-ext-diff", "--no-textconv", *detection]
         refs = [base, target, "--", *selected_paths]
         stat = self.git([*shared, "--stat", *refs])

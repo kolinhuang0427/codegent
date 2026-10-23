@@ -186,3 +186,42 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(report["total_bytes"], 7)
         self.assertTrue(report["truncated"])
         self.assertEqual(self.payload("files", "--include", "missing*")["matching_files"], 0)
+
+    def test_source_context_clamps_to_blob_and_preserves_requested_range(self):
+        self.write("a", "one\ntwo\nthree\nfour\nfive")
+        self.commit()
+        report = self.payload("source", "a", "--lines", "2:3", "--context", "1")
+        self.assertEqual(report["content"], "one\ntwo\nthree\nfour\n")
+        self.assertEqual(report["line_range"], "2:3")
+        self.assertEqual(report["effective_line_range"], "1:4")
+        self.assertEqual([r["number"] for r in report["lines"]], [1, 2, 3, 4])
+        self.assertEqual(self.payload("source", "a", "--lines", "5:5", "--context", "20")["content"], "one\ntwo\nthree\nfour\nfive")
+        self.assertEqual(self.cli("source", "a", "--context", "1").returncode, 1)
+
+    def test_patch_can_preview_target_changes_since_merge_base(self):
+        self.write("root")
+        shared = self.commit()
+        self.write("main")
+        self.commit()
+        self.git("checkout", "-b", "side", shared)
+        self.write("side")
+        self.commit()
+        report = self.payload("patch", "main", "side", "--merge-base")
+        self.assertEqual(report["resolved_a"], shared)
+        self.assertNotEqual(report["input_a_resolved"], shared)
+        self.assertIn("b/side", report["patch"])
+        self.assertNotIn("b/main", report["patch"])
+        self.assertTrue(report["merge_base"])
+
+    def test_patch_copy_detection_reports_copy_provenance(self):
+        content = "original content\n" * 20
+        self.write("old", content)
+        base = self.commit()
+        self.write("new", content)
+        self.commit()
+        ordinary = self.payload("patch", base, "HEAD")
+        self.assertIn("new file mode", ordinary["patch"])
+        copied = self.payload("patch", base, "HEAD", "--find-copies")
+        self.assertIn("copy from old", copied["patch"])
+        self.assertIn("copy to new", copied["patch"])
+        self.assertTrue(copied["find_copies"])
