@@ -161,6 +161,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     owners.add_argument("--group-by", choices=("author", "commit"), default="author")
     owners.add_argument("--sort", choices=("lines", "author"), default="lines")
     owners.add_argument("--limit", type=positive_int, help="Maximum attribution groups; percentages keep the full line denominator")
+    owners.add_argument("--show-lines", action="store_true", help="Include inclusive final-file line ranges for each group")
     owners.set_defaults(handler=_cmd_owners)
 
     timeline = subparsers.add_parser("timeline", parents=[common], help="Summarize activity by UTC author or committer date periods")
@@ -441,7 +442,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, detect_copies=args.detect_copies, group_by=args.group_by, max_bytes=args.max_bytes, sort=args.sort, limit=args.limit)
+    report = _tracer(args).owners(args.path, args.ref, lines=args.lines, ignore_revs_file=args.ignore_revs_file, detect_moves=args.detect_moves, detect_copies=args.detect_copies, group_by=args.group_by, max_bytes=args.max_bytes, sort=args.sort, limit=args.limit, show_lines=args.show_lines)
     return report if args.json_output or args.markdown or args.csv_output else render_owners(report)
 
 

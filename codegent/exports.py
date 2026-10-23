@@ -52,7 +52,9 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += ["", f"Showing {len(report['directories'])} of {report['total_directories']} directories.", _cell(report["path_policy"])]
     elif command == "owners":
         keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])
-        lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []), [
+        if report.get("show_lines"):
+            keys.append("line_ranges")
+        lines += _table(["Author", "Lines", "Percent"] + (["Commit"] if "commit" in keys else []) + (["Line ranges"] if "line_ranges" in keys else []), [
             [row[key] for key in keys] for row in report["owners"]])
         lines += ["", f"Showing {report['displayed_groups']} of {report['total_groups']} groups; omitted lines: {report['omitted_lines']}.", _cell(report["attribution"])]
     elif command == "patch":

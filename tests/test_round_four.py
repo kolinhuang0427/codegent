@@ -293,3 +293,16 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(self.payload("owners", "a", "--limit", "1")["owners"][0]["lines"], 2)
         md = self.cli("owners", "a", "--limit", "1", "--markdown")
         self.assertIn("omitted lines: 1", md.stdout)
+
+    def test_ownership_reports_final_line_ranges_for_selected_groups(self):
+        self.write("a", "first\nsecond\nthird\nfourth\n")
+        self.commit()
+        self.write("a", "first\nchanged second\nthird\nchanged fourth\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        report = self.payload("owners", "a", "--show-lines", "--lines", "2:4")
+        first = next(r for r in report["owners"] if r["author"].startswith("First"))
+        second = next(r for r in report["owners"] if r["author"].startswith("Second"))
+        self.assertEqual(first["line_ranges"], [[3, 3]])
+        self.assertEqual(second["line_ranges"], [[2, 2], [4, 4]])
+        self.assertNotIn("line_ranges", self.payload("owners", "a")["owners"][0])
+        self.assertEqual(self.cli("owners", "a", "--show-lines", "--markdown").returncode, 0)

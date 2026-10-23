@@ -378,3 +378,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `divergence BASE TARGET` reports locally reachable commits unique to each side, shared commits, all merge bases, and whether the tips are equal, ancestors, diverged, or unrelated. It resolves both tips once and does not fetch. Shallow repositories explicitly warn that counts and relationships describe only available history.
 
 `owners --sort lines|author --limit N` ranks and limits author/commit groups after attribution. Percentages retain the full selected-line denominator; reports disclose total/displayed groups and omitted line counts. Without `--limit`, all attribution groups remain visible.
+
+`owners --show-lines` adds inclusive `[start, end]` ranges of final-file line numbers for each attribution group. Ranges respect any selected line window and stay tied to the pinned revision, including after copy/move attribution.
