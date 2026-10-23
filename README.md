@@ -356,3 +356,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `refs --contains COMMIT` finds local branches, tags, and remote-tracking refs whose commit history contains the resolved revision. Both requested and resolved containment refs are recorded.
 
 `refs --points-at COMMIT` selects labels at the exact resolved commit, including annotated tags. It can be combined with `--contains` and kind filters; it does not fetch remote refs.
+
+`refs --sort name|version|date` selects lexical names, Git version sorting, or newest creator date before limiting. Creator date means tagger date for annotated tags and committer date for commit refs; equal dates use ref names as a stable tie-breaker.

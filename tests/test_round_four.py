@@ -128,3 +128,17 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual({r["short_name"] for r in report["refs"]}, {"main", "annotated", "lightweight"})
         self.assertEqual(report["points_at_resolved"], tip)
         self.assertEqual(self.payload("refs", "--points-at", old)["total_refs"], 1)
+
+    def test_ref_version_and_creator_date_sorting(self):
+        self.write("a")
+        old = self.commit(env={"GIT_COMMITTER_DATE": "2024-01-01T00:00:00Z"})
+        self.git("tag", "v2", old)
+        self.git("tag", "v10", old)
+        self.write("a", "changed\n")
+        self.commit(env={"GIT_COMMITTER_DATE": "2024-02-01T00:00:00Z"})
+        self.git("tag", "v3")
+        report = self.payload("refs", "--kind", "tag", "--sort", "version")
+        self.assertEqual([r["short_name"] for r in report["refs"]], ["v2", "v3", "v10"])
+        newest = self.payload("refs", "--kind", "tag", "--sort", "date", "--limit", "1")
+        self.assertEqual(newest["refs"][0]["short_name"], "v3")
+        self.assertTrue(newest["truncated"])
