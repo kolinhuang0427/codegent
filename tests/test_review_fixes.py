@@ -159,3 +159,56 @@ class ReviewFixTests(RepositoryCase):
         self.commit()
         oid = self.git("rev-parse", "HEAD:a")
         self.assertIn(oid, self.cli("files").stdout)
+
+    def test_historical_binary_attributes_apply_without_touching_real_index(self):
+        self.write("plain.dat", "readable bytes\n")
+        self.write(".gitattributes", "*.dat binary\n")
+        binary_tip = self.commit()
+        self.write(".gitattributes", "*.dat diff\n")
+        self.commit()
+        index_before = (self.repo / ".git/index").read_bytes()
+        for command in ("source", "owners"):
+            binary = self.cli(command, "plain.dat", "--ref", binary_tip, "--json")
+            self.assertEqual(binary.returncode, 1)
+            self.assertIn("binary", json.loads(binary.stderr)["error"])
+            self.assertEqual(self.cli(command, "plain.dat").returncode, 0)
+        self.assertEqual((self.repo / ".git/index").read_bytes(), index_before)
+
+    def test_binary_diff_driver_configuration_is_honored(self):
+        self.write("plain.dat", "readable bytes\n")
+        self.write(".gitattributes", "*.dat diff=asset\n")
+        self.commit()
+        self.git("config", "diff.asset.binary", "true")
+        self.assertEqual(self.cli("source", "plain.dat").returncode, 1)
+        self.assertEqual(self.cli("owners", "plain.dat").returncode, 1)
+
+    def test_copy_detection_keeps_sources_outside_selected_destination(self):
+        content = "original content\n" * 20
+        self.write("src/original", content)
+        self.write("other", "old\n")
+        base = self.commit()
+        self.write("dst/copy", content)
+        self.write("other", "new\n")
+        self.commit()
+        report = self.payload("diff", base, "HEAD", "--path", "dst", "--find-copies")
+        self.assertEqual(report["total_changed_files"], 1)
+        self.assertEqual(report["files"][0]["status"], "copied")
+        self.assertEqual(report["files"][0]["copied_from"], "src/original")
+        self.assertEqual(report["stat"], "")
+        patch = self.payload("patch", base, "HEAD", "--path", "dst", "--find-copies")["patch"]
+        self.assertIn("copy from src/original", patch)
+        self.assertIn("copy to dst/copy", patch)
+        self.assertNotIn("diff --git a/other", patch)
+        self.assertEqual(self.payload("patch", base, "HEAD", "--path", "missing", "--find-copies")["patch"], "")
+
+    def test_copy_patch_alignment_preserves_newline_paths(self):
+        content = "original content\n" * 20
+        self.write("src/old\nname", content)
+        base = self.commit()
+        self.write("dst/new\nname", content)
+        self.commit()
+        report = self.payload("diff", base, "HEAD", "--path", "dst", "--find-copies")
+        self.assertEqual(report["files"][0]["copied_from"], "src/old\nname")
+        patch = self.payload("patch", base, "HEAD", "--path", "dst", "--find-copies")["patch"]
+        self.assertIn("copy from", patch)
+        self.assertIn("old\\nname", patch)
