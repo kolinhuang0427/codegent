@@ -74,6 +74,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
     common.add_argument("--newest-first", action="store_true", default=argparse.SUPPRESS, help="Present file history from newest to oldest")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
+    common.add_argument("--ignore-case", action="store_true", default=argparse.SUPPRESS, help="Match author/message filters without case sensitivity")
     common.add_argument("--grep", default=argparse.SUPPRESS, help="Literal commit-message substring")
     common.add_argument("--author", default=argparse.SUPPRESS, help="Literal author name/email substring")
     common.add_argument("--since", default=argparse.SUPPRESS, help="Include commits since an ISO date (UTC if unspecified)")
@@ -237,6 +238,10 @@ def main(argv: list[str] | None = None) -> int:
     }.get(args.command, set())
     if args.command not in {"trace", "ancestry", "genemap", "bloodline", "commits"}:
         invalid = invalid | {"newest_first"}
+    if args.command not in {"trace", "ancestry", "genemap", "bloodline", "authors", "hotspots", "timeline", "cochange", "commits", "directories"}:
+        invalid = invalid | {"ignore_case"}
+    if args.ignore_case and not (args.author or args.grep):
+        parser.error("--ignore-case requires --author or --grep")
     unsupported = sorted(provided & invalid)
     if unsupported:
         flags = ["--no-follow" if key == "follow" else "--" + key.replace("_", "-") for key in unsupported]
@@ -309,7 +314,7 @@ def _write_output(text: str, destination: str | None, *, no_clobber: bool = Fals
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "csv_output": False, "no_color": False, "ascii": False, "compact": False, "no_clobber": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
+        "ignore_case": False, "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -317,7 +322,7 @@ def _apply_defaults(args: argparse.Namespace) -> None:
 
 
 def _history_options(args: argparse.Namespace) -> dict[str, Any]:
-    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "grep": args.grep, "follow": args.follow, "first_parent": args.first_parent, "newest_first": args.newest_first}
+    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "grep": args.grep, "ignore_case": args.ignore_case, "follow": args.follow, "first_parent": args.first_parent, "newest_first": args.newest_first}
 
 
 def _tracer(args: argparse.Namespace) -> GitTracer:

@@ -346,3 +346,5 @@ Blame reports reset implicitly configured `blame.ignoreRevsFile` entries. Only a
 Unified patch previews explicitly use `a/` and `b/` prefixes and repository-root paths, independent of `diff.noprefix`, `diff.mnemonicPrefix`, or relative-display configuration.
 
 Repository-wide history and commit ranges include empty commits and merge commits. A literal file/directory scope still uses Git path-limited traversal and can omit commits that do not change that scope. Merge statistics follow Git's default history presentation.
+
+History `--ignore-case` makes literal `--author` and `--grep` matching case-insensitive. It requires one of these filters and records the setting in selection metadata.

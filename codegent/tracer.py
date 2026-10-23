@@ -217,6 +217,7 @@ class GitTracer:
         until: str | None = None,
         author: str | None = None,
         grep: str | None = None,
+        ignore_case: bool = False,
         follow: bool | None = True,
         allow_empty: bool = False,
         first_parent: bool = False,
@@ -258,6 +259,9 @@ class GitTracer:
             args.append("--follow")
         elif follow is False:
             selection["follow"] = False
+        if ignore_case:
+            args.append("--regexp-ignore-case")
+            selection["ignore_case"] = True
         if grep:
             selection["grep"] = grep
             args.extend(["--fixed-strings", f"--grep={grep}"])

@@ -60,3 +60,14 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(report["total_commits"], 3)
         scoped = self.payload("commits", base, "HEAD", "--path", "b")
         self.assertEqual(scoped["total_commits"], 1)
+
+    def test_history_filters_can_ignore_case(self):
+        self.write("a")
+        self.commit("Fix MixedCASE")
+        self.assertEqual(self.payload("timeline", "--grep", "mixedcase")["periods"], [])
+        report = self.payload("timeline", "--grep", "mixedcase", "--ignore-case")
+        self.assertEqual(sum(r["commits"] for r in report["periods"]), 1)
+        self.assertTrue(report["selection"]["ignore_case"])
+        self.assertEqual(self.payload("authors", "a", "--author", "FIRST AUTHOR", "--ignore-case")["total_authors"], 1)
+        self.assertEqual(self.cli("files", "--ignore-case", "--grep", "a").returncode, 2)
+        self.assertEqual(self.cli("trace", "a", "--ignore-case").returncode, 2)
