@@ -340,3 +340,5 @@ is a metadata carrier, not a data observation. Formats are mutually exclusive.
 Version 0.4.0 adds `refs`, `commits BASE TARGET`, and `patch BASE TARGET`, along
 with timeline date/gap controls, file size/mode controls, and copy/commit blame
 attribution. Python requirements remain 3.10+; runtime dependencies remain empty.
+
+Blame reports reset implicitly configured `blame.ignoreRevsFile` entries. Only an explicitly supplied `owners --ignore-revs-file` changes attribution. Git still validates configured ignore files while reading its configuration.

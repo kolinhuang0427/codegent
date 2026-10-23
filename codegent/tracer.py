@@ -425,7 +425,7 @@ class GitTracer:
             raise GitError("ownership grouping must be author or commit")
         source, size = self._text_blob(commit, path, max_bytes=max_bytes, purpose="line ownership")
         file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
-        args = ["blame", "--line-porcelain"]
+        args = ["blame", "--line-porcelain", "--ignore-revs-file", ""]
         if detect_moves:
             args.append("-M")
         if detect_copies:
