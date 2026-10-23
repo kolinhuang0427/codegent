@@ -77,3 +77,29 @@ Binary file changes are detected from git numstat output and are reported withou
 Paths are literal filenames, including brackets and other Git pathspec metacharacters.
 Relative paths resolve from the directory passed to `--repo`. Absolute paths inside
 that repository are also accepted, including paths deleted from the current tree.
+
+### Incomplete history
+
+Shallow clones and commit limits are reported explicitly in every history view.
+JSON includes `history_complete`, `origin_confirmed`, `shallow`, and `warnings`.
+`origin` denotes the earliest observed commit; it is a confirmed origin only when
+`origin_confirmed` is true. Net line counts are estimates, not surviving-line attribution.
+
+### Historical tips
+
+All history commands accept `--ref <commit-or-tag>`, for example
+`codegent ancestry src/auth.py --ref v1.0.0`. Trace also retains its optional
+positional commit argument; conflicting positional and named refs are rejected.
+
+### Date windows
+
+Use `--since 2026-01-01 --until 2026-02-01T23:59:59Z` to select commits by Git's
+committer date. Values must be ISO dates or datetimes; omitted timezones mean UTC,
+and date-only values mean midnight. Filtered results describe the selection and
+do not claim a confirmed origin.
+
+`--author "name or email"` selects a literal, case-sensitive author substring.
+It can be combined with date windows and commit limits.
+
+`--no-follow` inspects only the selected filename instead of following its earlier
+names. JSON and text reports disclose this restricted history scope.

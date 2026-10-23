@@ -13,22 +13,12 @@ def render_trace(bloodline: Bloodline, *, color: bool = True) -> str:
     lines = [
         "",
         f"  {heading('Tracing lineage for:', color)} {bloodline.path}",
-        f"  {muted('Follows renames:', color)} yes",
+        f"  {muted('Follows renames:', color)} {'yes' if bloodline.followed_renames else 'no'}",
         "",
         render_family_tree(bloodline, color=color),
         "",
         render_bloodline_summary(bloodline, color=color),
     ]
-    if bloodline.truncated:
-        lines.append("")
-        lines.append(
-            "  "
-            + paint(
-                f"History truncated at --max-commits={bloodline.max_commits}.",
-                ANSI.YELLOW,
-                color,
-            )
-        )
     return "\n".join(lines).rstrip() + "\n"
 
 
@@ -50,6 +40,7 @@ def render_ancestry(bloodline: Bloodline, *, color: bool = True) -> str:
         f"  {heading('Ancestry:', color)} {bloodline.path}",
         "",
     ]
+    lines.extend(f"  Warning: {warning}" for warning in bloodline.warnings)
     genes = bloodline.genes()
     for index, gene in enumerate(genes):
         prefix = "└─" if index == len(genes) - 1 else "├─"
@@ -76,6 +67,7 @@ def render_genemap(bloodline: Bloodline, *, color: bool = True) -> str:
         f"  {heading('Gene Map:', color)} {bloodline.path}",
         f"  {muted('oldest', color)}",
     ]
+    lines.extend(f"  Warning: {warning}" for warning in bloodline.warnings)
     for commit in bloodline.commits:
         marker = _role_marker(commit.role)
         marker = paint(marker, _role_color(commit.role), color, bold=True)
@@ -100,20 +92,22 @@ def render_bloodline_summary(bloodline: Bloodline, *, color: bool = True) -> str
     if origin is None:
         return "  No bloodline available."
     age = _format_age_days(bloodline.age_days)
+    origin_label = "Origin" if bloodline.history_complete else "Earliest observed"
     migrations = len(bloodline.migrations)
     migration_word = "event" if migrations == 1 else "events"
     lines = [
         f"  {heading('Bloodline Summary', color)}",
         "  ─────────────────────────",
-        f"  Origin author:      {origin.author}",
-        f"  Origin commit:      {paint(origin.short_hash, ANSI.YELLOW, color)}",
-        f"  Origin date:        {origin.date}",
+        f"  {origin_label} author: {origin.author}",
+        f"  {origin_label} commit: {paint(origin.short_hash, ANSI.YELLOW, color)}",
+        f"  {origin_label} date: {origin.date}",
         f"  Code age:           {age}",
         f"  Total commits:      {len(bloodline.commits)}",
         f"  Migration events:   {migrations} {migration_word}",
         f"  Genetic diversity:  {bloodline.genetic_diversity} authors",
         f"  Current line trace: {bloodline.current_carried_lines} net lines",
     ]
+    lines.extend(f"  Warning: {warning}" for warning in bloodline.warnings)
     if bloodline.latest and bloodline.latest.binary:
         lines.append("  Binary note:        latest traced change was binary")
     return "\n".join(lines)

@@ -109,6 +109,25 @@ class Bloodline:
     followed_renames: bool = True
     max_commits: int | None = None
     truncated: bool = False
+    shallow: bool = False
+    selection: dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def history_complete(self) -> bool:
+        return not (self.truncated or self.shallow or self.selection)
+
+    @property
+    def warnings(self) -> list[str]:
+        warnings: list[str] = []
+        if self.truncated:
+            warnings.append(f"History truncated at --max-commits={self.max_commits}.")
+        if self.shallow:
+            warnings.append("Shallow repository: older history may be missing.")
+        if self.selection:
+            warnings.append("History selection is active; statistics describe selected commits.")
+        if not self.history_complete:
+            warnings.append("The earliest observed commit is not a confirmed file origin.")
+        return warnings
 
     @property
     def origin(self) -> CommitNode | None:
@@ -173,6 +192,9 @@ class Bloodline:
         carried = 0
         genes: list[CodeGene] = []
         current_path = self.path
+        for commit in reversed(self.commits):
+            if commit.renamed_from:
+                current_path = commit.renamed_from
         for commit in self.commits:
             if commit.renamed_to:
                 current_path = commit.renamed_to
@@ -205,6 +227,11 @@ class Bloodline:
             "followed_renames": self.followed_renames,
             "max_commits": self.max_commits,
             "truncated": self.truncated,
+            "shallow": self.shallow,
+            "history_complete": self.history_complete,
+            "origin_confirmed": self.history_complete and self.origin is not None,
+            "selection": self.selection,
+            "warnings": self.warnings,
             "origin": self.origin.to_dict() if self.origin else None,
             "latest": self.latest.to_dict() if self.latest else None,
             "total_commits": len(self.commits),
