@@ -27,6 +27,7 @@ class CommitNode:
     author_email: str
     date: str
     message: str
+    committer_date: str = ""
     additions: int = 0
     deletions: int = 0
     files: list[str] = field(default_factory=list)
@@ -54,6 +55,7 @@ class CommitNode:
             "author_name": self.author_name,
             "author_email": self.author_email,
             "date": self.date,
+            "committer_date": self.committer_date,
             "message": self.message,
             "additions": self.additions,
             "deletions": self.deletions,

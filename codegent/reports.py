@@ -1,6 +1,7 @@
 """Maintainer reports derived from observed repository history."""
 from __future__ import annotations
 
+from datetime import date as calendar_date, timedelta
 from typing import Any
 from fnmatch import fnmatchcase
 
@@ -105,13 +106,19 @@ def render_owners(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def timeline_report(history: Bloodline, *, period: str = "month") -> dict[str, Any]:
+def timeline_report(history: Bloodline, *, period: str = "month", date_basis: str = "author", fill_gaps: bool = False, max_periods: int = 1000) -> dict[str, Any]:
+    positive_count(max_periods, "max_periods")
     widths = {"day": 10, "month": 7, "year": 4}
     if period not in widths:
         raise GitError("timeline period must be day, month, or year")
+    if date_basis not in {"author", "committer"}:
+        raise GitError("timeline date basis must be author or committer")
     buckets: dict[str, dict[str, Any]] = {}
     for commit in history.commits:
-        key = iso_date(commit.date)[:widths[period]]
+        date = commit.date if date_basis == "author" else commit.committer_date
+        if not date:
+            raise GitError("requested timeline dates are unavailable in supplied history")
+        key = iso_date(date)[:widths[period]]
         row = buckets.setdefault(key, {"period": key, "commits": 0, "authors": set(), "files": set(),
                                        "additions": 0, "deletions": 0, "binary_changes": 0})
         row["commits"] += 1
@@ -120,6 +127,27 @@ def timeline_report(history: Bloodline, *, period: str = "month") -> dict[str, A
         row["additions"] += commit.additions
         row["deletions"] += commit.deletions
         row["binary_changes"] += sum(int(item["binary"]) for item in commit.changes)
+    if fill_gaps and buckets:
+        first, last = min(buckets), max(buckets)
+        current = calendar_date.fromisoformat(first + {"day": "", "month": "-01", "year": "-01-01"}[period])
+        while True:
+            key = current.isoformat()[:widths[period]]
+            if key > last:
+                break
+            buckets.setdefault(key, {"period": key, "commits": 0, "authors": set(), "files": set(),
+                                     "additions": 0, "deletions": 0, "binary_changes": 0})
+            if len(buckets) > max_periods:
+                raise GitError("timeline exceeds --max-periods; increase the budget or narrow history")
+            if key == last:
+                break
+            if period == "day":
+                current += timedelta(days=1)
+            elif period == "month":
+                current = calendar_date(current.year + (current.month == 12), current.month % 12 + 1, 1)
+            else:
+                current = calendar_date(current.year + 1, 1, 1)
+    if len(buckets) > max_periods:
+        raise GitError("timeline exceeds --max-periods; increase the budget or narrow history")
     rows = [buckets[key] for key in sorted(buckets)]
     for row in rows:
         row["authors"] = len(row["authors"])
@@ -127,7 +155,7 @@ def timeline_report(history: Bloodline, *, period: str = "month") -> dict[str, A
     return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
             "selection": history.selection, "warnings": history.warnings, "period": period,
-            "date_basis": "author dates normalized to UTC", "periods": rows}
+            "date_basis": f"{date_basis} dates normalized to UTC", "date_basis_key": date_basis, "fill_gaps": fill_gaps, "max_periods": max_periods, "periods": rows}
 
 
 @safe_display
@@ -188,3 +216,37 @@ def render_source(report: dict[str, Any]) -> str:
 @safe_display
 def render_doctor(report: dict[str, Any]) -> str:
     return "Repository diagnostics\n" + "\n".join(f"{key}: {value}" for key, value in report.items()) + "\n"
+
+
+@safe_display
+def render_refs(report: dict[str, Any]) -> str:
+    lines = ["Repository references", "Kind  Ref  Object type  Object ID"]
+    lines.extend(f"{row['kind']}  {row['ref']}  {row['object_type']}  {row['object_id']}" for row in report["refs"])
+    lines.append(f"Showing {len(report['refs'])} of {report['total_refs']} references")
+    return "\n".join(lines) + "\n"
+
+
+def commit_range_report(history: Bloodline) -> dict[str, Any]:
+    commits = [dict(commit.to_dict(), role="selected") for commit in history.display_commits]
+    return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
+            "resolved_ref": history.resolved_ref, "commit_a": history.selection["excluded_ref"],
+            "commit_b": history.requested_ref, "excluded_resolved": history.selection["excluded_resolved"],
+            "selection": history.selection, "truncated": history.truncated, "shallow": history.shallow,
+            "range_complete": not (history.truncated or history.shallow) and set(history.selection) <= {"excluded_ref", "excluded_resolved"},
+            "warnings": [warning for warning in history.warnings if not warning.startswith("The earliest observed")],
+            "order": "newest-first" if history.newest_first else "oldest-first", "total_commits": len(commits), "commits": commits}
+
+
+@safe_display
+def render_commits(report: dict[str, Any]) -> str:
+    lines = [f"Commits in {report['commit_b']} excluding {report['commit_a']}: {report['total_commits']}"]
+    lines.extend(f"{row['short_hash']}  {row['author_name']}  {row['message']}" for row in report["commits"])
+    lines.extend(f"Warning: {warning}" for warning in report["warnings"])
+    return "\n".join(lines) + "\n"
+
+
+def render_patch(report: dict[str, Any]) -> str:
+    from .display import escape_text
+    title = escape_text(f"Patch preview: {report['commit_a']} -> {report['commit_b']}")
+    content = "\n".join(escape_text(line) for line in report["patch"].split("\n"))
+    return title + "\n" + (content or "No changes.\n")

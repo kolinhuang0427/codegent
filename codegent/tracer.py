@@ -221,6 +221,7 @@ class GitTracer:
         allow_empty: bool = False,
         first_parent: bool = False,
         newest_first: bool = False,
+        exclude_ref: str | None = None,
     ) -> Bloodline:
         positive_count(max_commits, "max_commits", allow_none=True)
         self.ensure_repository()
@@ -240,7 +241,7 @@ class GitTracer:
         args = [
             "log",
             "--date=iso-strict",
-            "--format=%x00%H%x00%P%x00%an%x00%ae%x00%aI%x00%s",
+            "--format=%x00%H%x00%P%x00%an%x00%ae%x00%aI%x00%cI%x00%s",
             "-z",
             "--no-ext-diff",
             "--no-textconv",
@@ -269,7 +270,12 @@ class GitTracer:
             args.append(f"--until={selection['until']}")
         if max_commits is not None and max_commits > 0:
             args.append(f"--max-count={max_commits + 1}")
-        args.extend([resolved, "--", path])
+        args.append(resolved)
+        if exclude_ref is not None:
+            excluded = self.resolve_ref(exclude_ref)
+            selection.update(excluded_ref=exclude_ref, excluded_resolved=excluded)
+            args.append(f"^{excluded}")
+        args.extend(["--", path])
 
         output = self.git(args)
         newest_commits = self._parse_log(output)
@@ -299,6 +305,30 @@ class GitTracer:
             rename_threshold=self.rename_threshold,
             mailmap=self.mailmap,
         )
+
+    def refs(self, *, kind: str = "all", limit: int = 1000) -> dict[str, Any]:
+        positive_count(limit, "limit")
+        scopes = {"branch": ["refs/heads"], "tag": ["refs/tags"], "remote": ["refs/remotes"],
+                  "all": ["refs/heads", "refs/tags", "refs/remotes"]}
+        if kind not in scopes:
+            raise GitError("ref kind must be branch, tag, remote, or all")
+        self.ensure_repository()
+        output = self.git(["for-each-ref", "--sort=refname",
+                           "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)", *scopes[kind]])
+        rows = []
+        try:
+            for record in output.split("\n"):
+                if not record:
+                    continue
+                name, oid, object_type, peeled, peeled_type = record.split("\0")
+                namespace = name.split("/")[1]
+                rows.append({"ref": name, "short_name": "/".join(name.split("/")[2:]),
+                             "kind": {"heads": "branch", "tags": "tag", "remotes": "remote"}[namespace],
+                             "object_id": oid, "object_type": object_type,
+                             "peeled_object_id": peeled or None, "peeled_type": peeled_type or None})
+        except (ValueError, KeyError, IndexError) as exc:
+            raise GitError("cannot parse Git reference metadata") from exc
+        return {"repo": self.repo, "kind": kind, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
 
     def doctor(self) -> dict[str, Any]:
         git_version = self.git(["--version"]).strip()
@@ -444,6 +474,24 @@ class GitTracer:
                 row["commits"].add(current["commit"])
         return owners
 
+    def patch(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None,
+              context: int = 3, max_bytes: int = 1048576) -> dict[str, Any]:
+        positive_count(max_bytes, "max_bytes")
+        if type(context) is not int or context < 0:
+            raise GitError("patch context must be a nonnegative integer")
+        self.ensure_repository()
+        selected = [self.normalize_path(path) for path in (paths or [])]
+        base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
+        patch = self.git(["diff", "--patch", "--no-ext-diff", "--no-textconv", "--no-color",
+                          f"--unified={context}", f"--find-renames={self.rename_threshold}%", base, target, "--", *selected])
+        size = len(patch.encode("utf-8", "surrogateescape"))
+        if size > max_bytes:
+            raise GitError(f"patch output exceeds --max-bytes={max_bytes}; narrow the comparison")
+        return {"repo": self.repo, "commit_a": commit_a, "commit_b": commit_b,
+                "resolved_a": base, "resolved_b": target, "paths": selected, "context": context,
+                "size_bytes": size, "max_bytes": max_bytes, "ignore_whitespace": self.ignore_whitespace,
+                "rename_threshold": self.rename_threshold, "patch": patch}
+
     def diff_lineage(self, commit_a: str, commit_b: str, *, paths: list[str] | None = None, merge_base: bool = False, find_copies: bool = False, statuses: list[str] | None = None) -> DiffLineage:
         self.ensure_repository()
         if statuses and any(status not in CHANGE_STATUSES for status in statuses):
@@ -518,11 +566,11 @@ class GitTracer:
             if tokens[index] in ("", "\n"):
                 index += 1
                 continue
-            commit_hash, parents, author_name, author_email, date, message = tokens[index:index + 6]
-            index += 6
+            commit_hash, parents, author_name, author_email, date, committer_date, message = tokens[index:index + 7]
+            index += 7
             node = CommitNode(
                 hash=commit_hash, parents=parents.split(), author_name=author_name,
-                author_email=author_email, date=date, message=message,
+                author_email=author_email, date=date, committer_date=committer_date, message=message,
             )
             while index < len(tokens) and tokens[index] not in ("", "\n"):
                 item, index = self._numstat_entry(tokens, index)
