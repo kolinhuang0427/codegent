@@ -375,7 +375,7 @@ class GitTracer:
                 "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "-z"])),
                 "timeout_seconds": self.timeout}
 
-    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int | None = 1000, sort: str = "path", kind: str = "all", min_bytes: int | None = None, max_bytes: int | None = None) -> dict[str, Any]:
+    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int | None = 1000, sort: str = "path", kind: str = "all", min_bytes: int | None = None, max_bytes: int | None = None, includes: list[str] | None = None, excludes: list[str] | None = None) -> dict[str, Any]:
         positive_count(limit, "limit", allow_none=True)
         for bound, name in ((min_bytes, "min_bytes"), (max_bytes, "max_bytes")):
             if bound is not None:
@@ -397,9 +397,12 @@ class GitTracer:
             files = [item for item in files if item["size"] is not None
                      and (min_bytes is None or item["size"] >= min_bytes)
                      and (max_bytes is None or item["size"] <= max_bytes)]
+        files = [item for item in files
+                 if (not includes or any(fnmatchcase(item["path"], pattern) for pattern in includes))
+                 and not any(fnmatchcase(item["path"], pattern) for pattern in (excludes or []))]
         files.sort(key=lambda item: (item["path"],) if sort == "path" else (item["size"] is None, -(item["size"] or 0), item["path"]))
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
-                "sort": sort, "min_bytes": min_bytes, "max_bytes": max_bytes, "unknown_size_entries": sum(item["size"] is None for item in files),
+                "includes": includes or [], "excludes": excludes or [], "sort": sort, "min_bytes": min_bytes, "max_bytes": max_bytes, "unknown_size_entries": sum(item["size"] is None for item in files),
                 "kind": kind, "total_files": total_files, "matching_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
                 "truncated": limit is not None and len(files) > limit, "files": files[:limit]}
 

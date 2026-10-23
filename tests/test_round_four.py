@@ -172,3 +172,17 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(self.payload("files", "--max-bytes", "0")["files"][0]["path"], "empty")
         self.assertEqual(self.cli("files", "--min-bytes", "4", "--max-bytes", "3").returncode, 1)
         self.assertEqual(len(GitTracer(str(self.repo)).tracked_files(limit=None)["files"]), 3)
+
+    def test_file_globs_filter_paths_before_ranking(self):
+        self.write("src/main.py", "abc")
+        self.write("src/generated.py", "abcdefgh")
+        self.write("tests/test.py", "test")
+        self.write("notes.md", "notes")
+        self.commit()
+        report = self.payload("files", "--include", "src/*", "--include", "tests/*", "--exclude", "*generated*", "--sort", "size", "--limit", "1")
+        self.assertEqual(report["files"][0]["path"], "tests/test.py")
+        self.assertEqual(report["matching_files"], 2)
+        self.assertEqual(report["total_files"], 4)
+        self.assertEqual(report["total_bytes"], 7)
+        self.assertTrue(report["truncated"])
+        self.assertEqual(self.payload("files", "--include", "missing*")["matching_files"], 0)

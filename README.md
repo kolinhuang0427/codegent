@@ -362,3 +362,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `refs --match "release/*"` filters short ref names with case-sensitive shell globs before the row limit. Repeated patterns are alternatives. `scanned_refs` is the count before name matching; `total_refs` is the matching count. CSV uses the same `peeled_type` field as JSON.
 
 `files --min-bytes N --max-bytes N` uses inclusive known-size bounds, including zero-byte blobs. Unknown-size entries do not match an active size bound. Size filters precede sorting/limiting; totals describe matched entries. The Python inventory API accepts `limit=None` for complete aggregation.
+
+`files --include GLOB --exclude GLOB` matches root-relative tree paths with case-sensitive shell globs. Includes are alternatives; exclusions win. Glob, mode, and byte filters all run before sorting and limits. The positional path remains literal.
