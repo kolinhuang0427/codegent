@@ -45,6 +45,8 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
         "selection": bloodline.selection, "total_commits": len(bloodline.commits),
         "total_authors": len(authors), "matching_authors": len(rows), "displayed_authors": len(rows[:limit]),
         "omitted_authors": len(authors) - len(rows[:limit]), "min_commits": min_commits,
+        "rename_threshold": bloodline.rename_threshold, "mailmap": bloodline.mailmap,
+        "max_commits": bloodline.max_commits, "followed_renames": bloodline.followed_renames,
         "authors": rows[:limit], "sort": sort, "group_by": group_by,
     }
 
@@ -181,9 +183,16 @@ def timeline_report(history: Bloodline, *, period: str = "month", date_basis: st
 
 @safe_display
 def render_timeline(report: dict[str, Any]) -> str:
-    lines = [f"Activity timeline: {report['path']} ({report['date_basis']})", "Period  Commits  Authors  Files  +Lines  -Lines" + ("  Total commits  Total+  Total-" if report["cumulative"] else "")]
-    lines.extend(f"{row['period']}  {row['commits']:7}  {row['authors']:7}  {row['files']:5}  {row['additions']:6}  {row['deletions']:6}" + (f"  {row['cumulative_commits']}  {row['cumulative_additions']}  {row['cumulative_deletions']}" if report["cumulative"] else "") for row in report["periods"])
+    keys = ["period", "commits", "authors", "files", "additions", "deletions", "binary_changes"]
+    headers = ["Period", "Commits", "Authors", "Files", "+Lines", "-Lines", "Binary changes"]
+    if report["cumulative"]:
+        keys += ["cumulative_" + key for key in ("commits", "additions", "deletions", "binary_changes")]
+        headers += ["Total commits", "Total+", "Total-", "Total binary changes"]
+    lines = [f"Activity timeline: {report['path']} ({report['date_basis']})", "  ".join(headers)]
+    lines.extend("  ".join(str(row[key]) for key in keys) for row in report["periods"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
+    if report["cumulative"]:
+        lines.append(report["cumulative_scope"])
     return "\n".join(lines) + "\n"
 
 
@@ -221,8 +230,8 @@ def render_cochange(report: dict[str, Any]) -> str:
 
 @safe_display
 def render_files(report: dict[str, Any]) -> str:
-    lines = [f"Tracked files: {report['path']} at {report['resolved_ref'][:12]}", "Mode  Type  Bytes  Path"]
-    lines.extend(f"{row['mode']}  {row['type']}  {row['size'] if row['size'] is not None else '-'}  {row['path']}" for row in report["files"])
+    lines = [f"Tracked files: {report['path']} at {report['resolved_ref'][:12]}", "Mode  Type  Bytes  Object ID  Path"]
+    lines.extend(f"{row['mode']}  {row['type']}  {row['size'] if row['size'] is not None else '-'}  {row['object_id']}  {row['path']}" for row in report["files"])
     lines.append(f"Showing {len(report['files'])} of {report['matching_files']} matching entries ({report['total_files']} before filters)")
     return "\n".join(lines) + "\n"
 

@@ -14,7 +14,7 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .exports import render_markdown, render_csv
-from .display import escape_text, ascii_graphics
+from .display import escape_text, ASCII_DRAWING
 from ._version import __version__
 from .tracer import GitError, GitTracer, CHANGE_STATUSES
 from .reports import render_divergence, inventory_report, render_inventory, directory_report, render_directories, author_report, render_authors, hotspot_report, render_hotspots, render_owners, timeline_report, render_timeline, cochange_report, render_cochange, render_files, render_source, render_doctor, render_refs, commit_range_report, render_commits, render_patch
@@ -297,7 +297,11 @@ def main(argv: list[str] | None = None) -> int:
     color = supports_color(args.no_color or args.ascii) and not (args.json_output or args.markdown or args.csv_output) and args.output in (None, "-")
     handler: Callable[[argparse.Namespace, bool], Any] = args.handler
     try:
-        result = handler(args, color)
+        drawing_token = ASCII_DRAWING.set(args.ascii)
+        try:
+            result = handler(args, color)
+        finally:
+            ASCII_DRAWING.reset(drawing_token)
         if args.json_output:
             output = json.dumps(result, indent=None if args.compact else 2,
                                 separators=(",", ":") if args.compact else None, sort_keys=True)
@@ -306,7 +310,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.csv_output:
             output = render_csv(result, args.command, delimiter={"comma": ",", "semicolon": ";", "tab": "\t"}[args.csv_delimiter])
         else:
-            output = ascii_graphics(result) if args.ascii else result
+            output = result
         _write_output(output, args.output, no_clobber=args.no_clobber)
     except BrokenPipeError:
         # Redirect the descriptor so shutdown cannot flush the closed pipe again.

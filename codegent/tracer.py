@@ -291,6 +291,8 @@ class GitTracer:
             "--numstat",
             f"--find-renames={self.rename_threshold}%",
         ]
+        if self.rename_threshold != 50:
+            selection["rename_threshold"] = self.rename_threshold
         if self.ignore_whitespace:
             selection["ignore_whitespace"] = True
         if merge_filter not in {None, "merges", "no-merges"}:

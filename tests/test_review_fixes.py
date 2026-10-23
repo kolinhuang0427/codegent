@@ -97,3 +97,65 @@ class ReviewFixTests(RepositoryCase):
             with self.assertRaisesRegex(GitExecutionError, "supported range"):
                 tracer.git(["--version"])
             stop.assert_called_once_with(process)
+
+    def test_ascii_preserves_repository_drawing_characters(self):
+        name = "│◆•.py"
+        self.write(name)
+        self.commit("keep │◆• in subject")
+        for command in ("trace", "ancestry", "genemap", "bloodline"):
+            result = self.cli(command, name, "--ascii")
+            self.assertEqual(result.returncode, 0, result.stderr)
+            if command != "bloodline":
+                self.assertIn(name, result.stdout)
+        self.assertIn("keep │◆• in subject", self.cli("trace", name, "--ascii").stdout)
+
+    def test_markdown_summary_and_ownership_scope_are_preserved(self):
+        self.write("a")
+        self.commit()
+        bloodline = self.cli("bloodline", "a", "--markdown")
+        self.assertIn("Genetic diversity", bloodline.stdout)
+        self.assertIn("Current net line trace", bloodline.stdout)
+        owners = self.cli("owners", "a", "--lines", "2:2", "--markdown")
+        self.assertIn("Selected lines: 1 of 3; range: 2:2", owners.stdout)
+        authors = self.payload("authors", "a", "--mailmap", "--rename-threshold", "100")
+        self.assertEqual(authors["rename_threshold"], 100)
+        self.assertTrue(authors["mailmap"])
+        self.assertFalse(authors["history_complete"])
+
+    def test_markdown_comparisons_preserve_binary_provenance_and_statuses(self):
+        self.write("old", "original\n" * 20)
+        base = self.commit()
+        self.git("mv", "old", "new")
+        (self.repo / "binary").write_bytes(b"\0binary")
+        self.commit()
+        md = self.cli("diff", base, "HEAD", "--markdown").stdout
+        self.assertIn("| new | old | renamed |", md)
+        self.assertIn("unavailable", md)
+        self.assertIn("| binary |", md)
+        summary = self.cli("diff", base, "HEAD", "--summary", "--markdown").stdout
+        self.assertIn("| renamed | 1 |", summary)
+        filtered = self.cli("diff", base, "HEAD", "--status", "deleted").stdout
+        self.assertIn("No changes matched", filtered)
+        self.assertIn("2 before filtering", filtered)
+
+    def test_empty_csv_and_binary_timeline_columns_match_requested_report(self):
+        import csv, io
+        (self.repo / "binary").write_bytes(b"\0binary")
+        self.commit()
+        for flag in ("--no-color", "--markdown"):
+            rendered = self.cli("timeline", "--cumulative", flag).stdout
+            self.assertIn("Binary changes", rendered)
+            self.assertIn("Total binary changes", rendered)
+        empty = self.cli("timeline", "--grep", "absent", "--cumulative", "--csv")
+        header = csv.DictReader(io.StringIO(empty.stdout)).fieldnames
+        self.assertIn("cumulative_binary_changes", header)
+        self.assertIn("cumulative_commits", header)
+        empty = self.cli("hotspots", "--min-commits", "2", "--csv")
+        header = csv.DictReader(io.StringIO(empty.stdout)).fieldnames
+        self.assertTrue({"authors", "first_changed", "last_changed"} <= set(header))
+
+    def test_default_file_report_includes_object_ids(self):
+        self.write("a")
+        self.commit()
+        oid = self.git("rev-parse", "HEAD:a")
+        self.assertIn(oid, self.cli("files").stdout)
