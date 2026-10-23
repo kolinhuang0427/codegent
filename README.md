@@ -103,3 +103,26 @@ It can be combined with date windows and commit limits.
 
 `--no-follow` inspects only the selected filename instead of following its earlier
 names. JSON and text reports disclose this restricted history scope.
+
+`--first-parent` follows the integration branch through merges, excluding individual
+side-branch commits. These reports describe the selected integration history.
+
+`--rename-threshold 80` sets Git's rename similarity percentage (1-100, default 50)
+for both history and diff. Rename detection is heuristic; stricter values can stop
+a lineage at a heavily edited rename. JSON records the selected threshold.
+
+`--timeout 10` limits each Git subprocess to a positive, finite number of seconds
+(default 30). Timed-out operations return a readable error, including in JSON mode.
+
+`--ignore-whitespace` ignores whitespace when computing textual change statistics
+and diffs. History may still list commits with no remaining textual changes.
+
+`--mailmap` canonicalizes history author names and emails using Git's current
+mailmap configuration. Without it, history reports preserve recorded identities.
+
+### Author summaries
+
+`codegent authors src/auth.py --sort churn --limit 10 --json` aggregates commit
+counts, additions, deletions, binary changes, and first/last author dates per
+identity. Sorting supports `commits`, `churn`, and `name`. All history filters apply.
+Churn measures changed lines, not quality or current ownership.

@@ -9,6 +9,7 @@ from typing import Any, Callable
 
 from .colors import danger, supports_color
 from .tracer import GitError, GitTracer
+from .reports import author_report, render_authors
 from .tree import (
     render_ancestry,
     render_bloodline_summary,
@@ -27,6 +28,11 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--mailmap", action="store_true", default=argparse.SUPPRESS, help="Canonicalize history authors with .mailmap")
+    common.add_argument("--ignore-whitespace", action="store_true", default=argparse.SUPPRESS, help="Ignore whitespace in textual change statistics")
+    common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for each Git process (default: 30)")
+    common.add_argument("--rename-threshold", type=int, default=argparse.SUPPRESS, help="Rename similarity percentage, 1-100 (default: 50)")
+    common.add_argument("--first-parent", action="store_true", default=argparse.SUPPRESS, help="Follow the integration branch through merges")
     common.add_argument("--no-follow", action="store_false", dest="follow", default=argparse.SUPPRESS, help="Stop at the current filename")
     common.add_argument("--author", default=argparse.SUPPRESS, help="Literal author name/email substring")
     common.add_argument("--since", default=argparse.SUPPRESS, help="Include commits since an ISO date (UTC if unspecified)")
@@ -71,6 +77,12 @@ def build_parser() -> argparse.ArgumentParser:
     diff.add_argument("commit_b", help="Target commit/ref")
     diff.set_defaults(handler=_cmd_diff)
 
+    authors = subparsers.add_parser("authors", parents=[common], help="Summarize authors and churn for a file")
+    authors.add_argument("path")
+    authors.add_argument("--sort", choices=("commits", "churn", "name"), default="commits")
+    authors.add_argument("--limit", type=positive_int, default=20)
+    authors.set_defaults(handler=_cmd_authors)
+
     return parser
 
 
@@ -97,7 +109,7 @@ def main(argv: list[str] | None = None) -> int:
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
         "ref": "HEAD", "repo": ".", "json_output": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -105,14 +117,18 @@ def _apply_defaults(args: argparse.Namespace) -> None:
 
 
 def _history_options(args: argparse.Namespace) -> dict[str, Any]:
-    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "follow": args.follow}
+    return {"max_commits": args.max_commits, "since": args.since, "until": args.until, "author": args.author, "follow": args.follow, "first_parent": args.first_parent}
+
+
+def _tracer(args: argparse.Namespace) -> GitTracer:
+    return GitTracer(args.repo, rename_threshold=args.rename_threshold, timeout=args.timeout, ignore_whitespace=args.ignore_whitespace, mailmap=args.mailmap)
 
 
 def _history(args: argparse.Namespace):
     positional_ref = getattr(args, "commit_hash", None)
     if positional_ref and args.ref != "HEAD" and positional_ref != args.ref:
         raise GitError("choose either a positional commit or --ref, not conflicting refs")
-    return GitTracer(args.repo).trace_path(
+    return _tracer(args).trace_path(
         args.path, positional_ref or args.ref, **_history_options(args),
     )
 
@@ -146,10 +162,15 @@ def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | st
 
 
 def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    diff = GitTracer(args.repo).diff_lineage(args.commit_a, args.commit_b)
+    diff = _tracer(args).diff_lineage(args.commit_a, args.commit_b)
     if args.json_output:
         return diff.to_dict()
     return render_diff_lineage(diff, color=color)
+
+
+def _cmd_authors(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
+    report = author_report(_history(args), sort=args.sort, limit=args.limit)
+    return report if args.json_output else render_authors(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

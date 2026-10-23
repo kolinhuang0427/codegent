@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import os
+import math
 import subprocess
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -44,6 +45,7 @@ class DiffLineage:
     commit_b: str
     files: list[dict[str, Any]]
     stat: str
+    rename_threshold: int = 50
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -52,17 +54,30 @@ class DiffLineage:
             "commit_b": self.commit_b,
             "files": self.files,
             "stat": self.stat,
+            "rename_threshold": self.rename_threshold,
         }
 
 
 class GitTracer:
     """Trace file history through git using subprocess calls."""
 
-    def __init__(self, repo: str = ".") -> None:
+    def __init__(self, repo: str = ".", *, rename_threshold: int = 50, timeout: float = 30.0, ignore_whitespace: bool = False, mailmap: bool = False) -> None:
+        if not 1 <= rename_threshold <= 100:
+            raise GitError("rename threshold must be between 1 and 100")
+        if not math.isfinite(timeout) or timeout <= 0:
+            raise GitError("timeout must be a positive finite number")
+        self.mailmap = mailmap
+        self.ignore_whitespace = ignore_whitespace
+        self.timeout = timeout
+        self.rename_threshold = rename_threshold
         self.repo = os.path.realpath(os.path.expanduser(repo))
         self.path_base = self.repo
 
     def git(self, args: list[str], *, check: bool = True, text: bool = True) -> str:
+        if self.ignore_whitespace and args and args[0] in ("log", "diff"):
+            args = [args[0], "--ignore-all-space", *args[1:]]
+        if self.mailmap and args and args[0] == "log":
+            args = [arg.replace("%an", "%aN").replace("%ae", "%aE") if arg.startswith("--format=") else arg for arg in args]
         cmd = ["git", "--literal-pathspecs", "-C", self.repo, *args]
         try:
             result = subprocess.run(
@@ -71,7 +86,10 @@ class GitTracer:
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=False,
+                timeout=self.timeout,
             )
+        except subprocess.TimeoutExpired as exc:
+            raise GitExecutionError(f"git timed out after {self.timeout:g} seconds") from exc
         except OSError as exc:
             raise GitExecutionError(f"cannot run git: {exc.strerror or exc}") from exc
         if check and result.returncode != 0:
@@ -136,6 +154,7 @@ class GitTracer:
         until: str | None = None,
         author: str | None = None,
         follow: bool = True,
+        first_parent: bool = False,
     ) -> Bloodline:
         if max_commits is not None and max_commits <= 0:
             raise GitError("max_commits must be greater than zero or None")
@@ -160,8 +179,13 @@ class GitTracer:
             "--no-ext-diff",
             "--no-textconv",
             "--numstat",
-            "--find-renames",
+            f"--find-renames={self.rename_threshold}%",
         ]
+        if self.ignore_whitespace:
+            selection["ignore_whitespace"] = True
+        if first_parent:
+            args.append("--first-parent")
+            selection["first_parent"] = True
         if follow:
             args.append("--follow")
         else:
@@ -200,6 +224,8 @@ class GitTracer:
             truncated=truncated,
             shallow=shallow,
             selection=selection,
+            rename_threshold=self.rename_threshold,
+            mailmap=self.mailmap,
         )
 
     def diff_lineage(self, commit_a: str, commit_b: str) -> DiffLineage:
@@ -207,9 +233,9 @@ class GitTracer:
         if not self.has_commits():
             raise GitRepositoryError("repository has no commits yet")
         base, target = self.resolve_ref(commit_a), self.resolve_ref(commit_b)
-        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", "--find-renames", base, target, "--"])
-        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", "--find-renames", base, target, "--"])
-        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", "--find-renames", base, target, "--"])
+        stat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--stat", f"--find-renames={self.rename_threshold}%", base, target, "--"])
+        numstat = self.git(["diff", "--no-ext-diff", "--no-textconv", "--numstat", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--"])
+        name_status = self.git(["diff", "--no-ext-diff", "--no-textconv", "--name-status", "-z", f"--find-renames={self.rename_threshold}%", base, target, "--"])
         files = self._merge_diff_outputs(numstat, name_status)
         return DiffLineage(
             repo=self.root(),
@@ -217,6 +243,7 @@ class GitTracer:
             commit_b=commit_b,
             files=files,
             stat=stat.rstrip(),
+            rename_threshold=self.rename_threshold,
         )
 
     def _numstat_entry(self, tokens: list[str], index: int) -> tuple[dict[str, Any], int]:
@@ -297,6 +324,8 @@ class GitTracer:
             if status.startswith(("R", "C")):
                 old_path, path = path, tokens[index]
                 index += 1
+            if self.ignore_whitespace and path not in stats_by_path:
+                continue
             entry = stats_by_path.setdefault(path, {
                 "path": path, "additions": 0, "deletions": 0, "binary": False,
             })

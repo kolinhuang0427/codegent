@@ -2,6 +2,67 @@ from .support import RepositoryCase
 
 
 class FeatureTests(RepositoryCase):
+    def test_author_report_aggregates_multiple_commits_per_identity(self):
+        self.write("file.py", "one\n")
+        self.commit()
+        self.write("file.py", "one\ntwo\n")
+        self.commit()
+        self.write("file.py", "one\ntwo\nthree\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        result = self.payload("authors", "file.py")
+        self.assertEqual(result["total_authors"], 2)
+        self.assertEqual(result["authors"][0]["commits"], 2)
+        self.assertEqual(result["authors"][0]["additions"], 2)
+        limited = self.payload("authors", "file.py", "--limit", "1", "--sort", "churn")
+        self.assertEqual(len(limited["authors"]), 1)
+
+    def test_mailmap_merges_author_aliases(self):
+        self.write("file.py")
+        self.commit("alias", env={"GIT_AUTHOR_NAME": "Alias", "GIT_AUTHOR_EMAIL": "alias@example.test"})
+        self.write("file.py", "changed\n")
+        self.write(".mailmap", "First Author <first@example.test> Alias <alias@example.test>\n")
+        self.commit("canonical")
+        self.assertEqual(self.payload("bloodline", "file.py")["genetic_diversity"], 2)
+        mapped = self.payload("bloodline", "file.py", "--mailmap")
+        self.assertEqual(mapped["genetic_diversity"], 1)
+        self.assertTrue(mapped["mailmap"])
+
+    def test_whitespace_only_diff_can_be_ignored(self):
+        self.write("file.py", "x = 1\n")
+        base = self.commit()
+        self.write("file.py", "x    =    1\n")
+        self.commit()
+        self.assertEqual(len(self.payload("diff", base, "HEAD")["files"]), 1)
+        self.assertEqual(self.payload("diff", base, "HEAD", "--ignore-whitespace")["files"], [])
+        history = self.payload("trace", "file.py", "--ignore-whitespace")
+        self.assertTrue(history["selection"]["ignore_whitespace"])
+
+    def test_rename_similarity_is_configurable_for_history_and_diff(self):
+        self.write("old.py", "".join(f"line {i}\n" for i in range(10)))
+        base = self.commit()
+        self.git("mv", "old.py", "new.py")
+        self.write("new.py", "".join(f"line {i}\n" for i in range(7)) + "changed a\nchanged b\nchanged c\n")
+        self.commit()
+        permissive = self.payload("trace", "new.py", "--rename-threshold", "30")
+        strict = self.payload("trace", "new.py", "--rename-threshold", "100")
+        self.assertEqual(permissive["total_commits"], 2)
+        self.assertEqual(strict["total_commits"], 1)
+        self.assertEqual(len(self.payload("diff", base, "HEAD", "--rename-threshold", "100")["files"]), 2)
+
+    def test_first_parent_excludes_side_branch_commits(self):
+        self.write("file.py")
+        self.commit("base")
+        self.git("checkout", "-b", "feature")
+        self.write("file.py", "feature\n")
+        feature = self.commit("side branch")
+        self.git("checkout", "main")
+        self.write("other.py")
+        self.commit("main work")
+        self.git("merge", "--no-ff", "feature", "-m", "integrate")
+        result = self.payload("trace", "file.py", "--first-parent")
+        self.assertNotIn(feature, [c["hash"] for c in result["commits"]])
+        self.assertTrue(result["selection"]["first_parent"])
+
     def test_no_follow_stops_before_the_previous_filename(self):
         self.write("old.py")
         self.commit()

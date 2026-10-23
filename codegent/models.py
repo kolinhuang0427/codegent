@@ -110,6 +110,8 @@ class Bloodline:
     max_commits: int | None = None
     truncated: bool = False
     shallow: bool = False
+    mailmap: bool = False
+    rename_threshold: int = 50
     selection: dict[str, Any] = field(default_factory=dict)
 
     @property
@@ -228,6 +230,8 @@ class Bloodline:
             "max_commits": self.max_commits,
             "truncated": self.truncated,
             "shallow": self.shallow,
+            "mailmap": self.mailmap,
+            "rename_threshold": self.rename_threshold,
             "history_complete": self.history_complete,
             "origin_confirmed": self.history_complete and self.origin is not None,
             "selection": self.selection,
