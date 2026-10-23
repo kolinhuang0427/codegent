@@ -9,7 +9,7 @@ class FeatureTests(RepositoryCase):
     def test_package_module_entrypoint_exposes_version_and_commands(self):
         result = subprocess.run([sys.executable, "-m", "codegent", "--version"], cwd=ROOT, capture_output=True, text=True)
         self.assertEqual(result.returncode, 0, result.stderr)
-        self.assertEqual(result.stdout.strip(), "codegent 0.4.0")
+        self.assertEqual(result.stdout.strip(), "codegent 0.5.0")
         help_result = subprocess.run([sys.executable, "-m", "codegent", "--help"], cwd=ROOT, capture_output=True, text=True)
         self.assertIn("hotspots", help_result.stdout)
 

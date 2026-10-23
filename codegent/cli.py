@@ -88,6 +88,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     formats.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
     formats.add_argument("--csv", action="store_true", dest="csv_output", default=argparse.SUPPRESS, help="Export tabular rows with JSON report metadata")
     formats.add_argument("--markdown", action="store_true", default=argparse.SUPPRESS, help="Export a Markdown report")
+    common.add_argument("--csv-delimiter", choices=("comma", "semicolon", "tab"), default=argparse.SUPPRESS, help="Field separator for --csv (default: comma)")
     common.add_argument("--compact", action="store_true", default=argparse.SUPPRESS, help="Emit single-line JSON reports (requires --json)")
     common.add_argument("--ascii", action="store_true", default=argparse.SUPPRESS, help="Use plain ASCII drawing characters in terminal reports")
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
@@ -260,6 +261,8 @@ def main(argv: list[str] | None = None) -> int:
     _apply_defaults(args)
     if sum((args.json_output, args.markdown, args.csv_output)) > 1:
         parser.error("choose one of --json, --markdown, and --csv")
+    if "csv_delimiter" in provided and not args.csv_output:
+        parser.error("--csv-delimiter requires --csv")
     if args.compact and not args.json_output:
         parser.error("--compact requires --json")
     if args.no_clobber and args.output in (None, "-"):
@@ -300,7 +303,7 @@ def main(argv: list[str] | None = None) -> int:
         elif args.markdown:
             output = render_markdown(result, args.command)
         elif args.csv_output:
-            output = render_csv(result, args.command)
+            output = render_csv(result, args.command, delimiter={"comma": ",", "semicolon": ";", "tab": "\t"}[args.csv_delimiter])
         else:
             output = ascii_graphics(result) if args.ascii else result
         _write_output(output, args.output, no_clobber=args.no_clobber)
@@ -357,7 +360,7 @@ def _write_output(text: str, destination: str | None, *, no_clobber: bool = Fals
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "csv_output": False, "no_color": False, "ascii": False, "compact": False, "no_clobber": False,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "csv_output": False, "csv_delimiter": "comma", "no_color": False, "ascii": False, "compact": False, "no_clobber": False,
         "merge_filter": None, "ignore_case": False, "max_commits": 10000, "since": None, "until": None, "author": None, "grep": None, "follow": True, "newest_first": False, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
