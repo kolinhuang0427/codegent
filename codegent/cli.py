@@ -4,10 +4,14 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+from pathlib import Path
+import tempfile
 import sys
 from typing import Any, Callable
 
 from .colors import danger, supports_color
+from .exports import render_markdown
 from .tracer import GitError, GitTracer
 from .reports import author_report, render_authors, hotspot_report, render_hotspots, render_owners
 from .tree import (
@@ -28,6 +32,7 @@ def positive_int(value: str) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     common = argparse.ArgumentParser(add_help=False)
+    common.add_argument("--output", default=argparse.SUPPRESS, help="Atomically write a report to a file; - means stdout")
     common.add_argument("--mailmap", action="store_true", default=argparse.SUPPRESS, help="Canonicalize history authors with .mailmap")
     common.add_argument("--ignore-whitespace", action="store_true", default=argparse.SUPPRESS, help="Ignore whitespace in textual change statistics")
     common.add_argument("--timeout", type=float, default=argparse.SUPPRESS, help="Timeout in seconds for each Git process (default: 30)")
@@ -39,7 +44,9 @@ def build_parser() -> argparse.ArgumentParser:
     common.add_argument("--until", default=argparse.SUPPRESS, help="Include commits up to an ISO date")
     common.add_argument("--ref", default=argparse.SUPPRESS, help="History tip (default: HEAD)")
     common.add_argument("--repo", default=argparse.SUPPRESS, help="Git repository path")
-    common.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
+    formats = common.add_mutually_exclusive_group()
+    formats.add_argument("--json", action="store_true", dest="json_output", default=argparse.SUPPRESS)
+    formats.add_argument("--markdown", action="store_true", default=argparse.SUPPRESS, help="Export a Markdown report")
     common.add_argument("--no-color", action="store_true", default=argparse.SUPPRESS)
     common.add_argument(
         "--max-commits",
@@ -104,26 +111,52 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     _apply_defaults(args)
-    color = supports_color(args.no_color) and not args.json_output
+    color = supports_color(args.no_color) and not (args.json_output or args.markdown) and args.output in (None, "-")
     handler: Callable[[argparse.Namespace, bool], Any] = args.handler
     try:
         result = handler(args, color)
+        if args.json_output:
+            output = json.dumps(result, indent=2, sort_keys=True)
+        elif args.markdown:
+            output = render_markdown(result, args.command)
+        else:
+            output = result
+        _write_output(output, args.output)
     except GitError as exc:
         return _error(str(exc), json_output=args.json_output, color=color)
     except KeyboardInterrupt:
         return _error("interrupted", json_output=args.json_output, color=color)
 
-    if args.json_output:
-        print(json.dumps(result, indent=2, sort_keys=True))
-    else:
-        print(result, end="" if result.endswith("\n") else "\n")
     return 0
+
+
+def _write_output(text: str, destination: str | None) -> None:
+    if not text.endswith("\n"):
+        text += "\n"
+    if destination in (None, "-"):
+        print(text, end="")
+        return
+    target = Path(destination).expanduser()
+    temporary: str | None = None
+    try:
+        with tempfile.NamedTemporaryFile(mode="w", encoding="utf-8", newline="\n",
+                                         dir=target.parent, prefix=".codegent-", delete=False) as stream:
+            temporary = stream.name
+            stream.write(text)
+            stream.flush()
+            os.fsync(stream.fileno())
+        os.replace(temporary, target)
+    except OSError as exc:
+        raise GitError(f"cannot write report to {str(target)!r}: {exc.strerror or exc}") from exc
+    finally:
+        if temporary and os.path.exists(temporary):
+            os.unlink(temporary)
 
 
 def _apply_defaults(args: argparse.Namespace) -> None:
     defaults = {
-        "ref": "HEAD", "repo": ".", "json_output": False, "no_color": False,
-        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False,
+        "ref": "HEAD", "repo": ".", "json_output": False, "markdown": False, "no_color": False,
+        "max_commits": 10000, "since": None, "until": None, "author": None, "follow": True, "first_parent": False, "rename_threshold": 50, "timeout": 30.0, "ignore_whitespace": False, "mailmap": False, "output": None,
     }
     for key, value in defaults.items():
         if not hasattr(args, key):
@@ -149,28 +182,28 @@ def _history(args: argparse.Namespace):
 
 def _cmd_trace(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output:
+    if args.json_output or args.markdown:
         return bloodline.to_dict()
     return render_trace(bloodline, color=color)
 
 
 def _cmd_ancestry(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output:
+    if args.json_output or args.markdown:
         return bloodline.to_dict()
     return render_ancestry(bloodline, color=color)
 
 
 def _cmd_genemap(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output:
+    if args.json_output or args.markdown:
         return bloodline.to_dict()
     return render_genemap(bloodline, color=color)
 
 
 def _cmd_bloodline(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     bloodline = _history(args)
-    if args.json_output:
+    if args.json_output or args.markdown:
         return bloodline.to_dict()
     return "\n" + render_bloodline_summary(bloodline, color=color) + "\n"
 
@@ -180,31 +213,31 @@ def _cmd_diff(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     if args.summary:
         report = {"repo": diff.repo, "commit_a": diff.commit_a, "commit_b": diff.commit_b,
                   "paths": diff.paths, "summary": diff.summary}
-        if args.json_output:
+        if args.json_output or args.markdown:
             return report
         summary = diff.summary
         return (f"{summary['files']} files: +{summary['additions']} -{summary['deletions']} lines; "
                 f"{summary['binary_files']} binary files\n" +
                 ", ".join(f"{key}={value}" for key, value in sorted(summary["statuses"].items())))
-    if args.json_output:
+    if args.json_output or args.markdown:
         return diff.to_dict()
     return render_diff_lineage(diff, color=color)
 
 
 def _cmd_authors(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = author_report(_history(args), sort=args.sort, limit=args.limit)
-    return report if args.json_output else render_authors(report)
+    return report if args.json_output or args.markdown else render_authors(report)
 
 
 def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
     report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits)
-    return report if args.json_output else render_hotspots(report)
+    return report if args.json_output or args.markdown else render_hotspots(report)
 
 
 def _cmd_owners(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     report = _tracer(args).owners(args.path, args.ref, lines=args.lines)
-    return report if args.json_output else render_owners(report)
+    return report if args.json_output or args.markdown else render_owners(report)
 
 
 def _error(message: str, *, json_output: bool, color: bool) -> int:

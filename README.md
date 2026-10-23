@@ -150,3 +150,14 @@ path set; including both old and new paths preserves cross-directory comparisons
 `diff --summary` emits aggregate file/status counts, text additions/deletions, and
 binary-file counts. Full diff JSON also includes the same `summary` object.
 Binary changes are counted as files, not invented line counts.
+
+### Saving reports
+
+`--output report.json --json` writes UTF-8 reports via a temporary file and atomic
+replacement. Successful exports replace existing files; failed report generation
+preserves them. Parent directories must exist. File exports disable ANSI colors.
+Omit `--output` or use `--output -` for stdout.
+
+`--markdown --output report.md` exports any report as portable Markdown tables,
+including history warnings. Repository text is escaped for HTML and table syntax.
+Choose one of `--markdown` and `--json`.
