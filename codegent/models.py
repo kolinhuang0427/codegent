@@ -221,7 +221,7 @@ class Bloodline:
                 CodeGene(
                     commit_hash=commit.hash,
                     short_hash=commit.short_hash,
-                    path=current_path,
+                    path=commit.files[0] if len(commit.files) == 1 else current_path,
                     author=commit.author,
                     date=commit.date,
                     role=commit.role,

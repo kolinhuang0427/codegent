@@ -260,6 +260,7 @@ def main(argv: list[str] | None = None) -> int:
         parser.error("choose one of --merges and --no-merges")
     provided = set(vars(args))
     _apply_defaults(args)
+    args.ref_explicit = "ref" in provided
     if sum((args.json_output, args.markdown, args.csv_output)) > 1:
         parser.error("choose one of --json, --markdown, and --csv")
     if "csv_delimiter" in provided and not args.csv_output:
@@ -386,7 +387,7 @@ def _tracer(args: argparse.Namespace) -> GitTracer:
 
 def _history(args: argparse.Namespace):
     positional_ref = getattr(args, "commit_hash", None)
-    if positional_ref and args.ref != "HEAD" and positional_ref != args.ref:
+    if positional_ref and args.ref_explicit and positional_ref != args.ref:
         raise GitError("choose either a positional commit or --ref, not conflicting refs")
     return _tracer(args).trace_path(
         args.path, positional_ref or args.ref, **_history_options(args),
