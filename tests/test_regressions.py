@@ -5,6 +5,48 @@ from .support import RepositoryCase
 
 
 class RegressionTests(RepositoryCase):
+    def test_argument_errors_are_json_and_unsupported_options_are_rejected(self):
+        for arguments in (("--json",), ("trace", "file.py", "--max-commits", "0", "--json"),
+                          ("--json", "trace", "file.py", "--markdown"),
+                          ("diff", "HEAD", "HEAD", "--since", "2026-01-01", "--json")):
+            result = self.cli(*arguments)
+            self.assertEqual(result.returncode, 2, result.stderr)
+            self.assertIn("error", json.loads(result.stderr))
+            self.assertEqual(result.stdout, "")
+
+    def test_closed_stdout_pipe_exits_without_a_traceback(self):
+        import sys
+        from .support import ROOT
+        self.write("file.py")
+        self.commit()
+        process = subprocess.Popen([sys.executable, "-m", "codegent", "trace", "file.py", "--repo", str(self.repo)],
+                                   cwd=ROOT, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+        process.stdout.close()
+        stderr = process.stderr.read()
+        process.stderr.close()
+        self.assertEqual(process.wait(timeout=10), 0, stderr)
+        self.assertNotIn("Traceback", stderr)
+
+    def test_non_utf8_terminal_gets_a_readable_export_suggestion(self):
+        self.write("中文.py")
+        self.commit()
+        result = self.cli("trace", "中文.py", env={"PYTHONIOENCODING": "ascii"})
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("UTF-8 terminal or --output", result.stderr)
+        self.assertNotIn("Traceback", result.stderr)
+
+    def test_empty_and_binary_ownership_and_signature_configuration(self):
+        self.write("empty.py", "")
+        (self.repo / "binary.dat").write_bytes(b"\0binary")
+        self.commit()
+        self.git("config", "log.showSignature", "true")
+        self.git("config", "color.ui", "always")
+        self.assertEqual(self.payload("trace", "empty.py")["total_commits"], 1)
+        self.assertEqual(self.payload("owners", "empty.py")["owners"], [])
+        result = self.cli("owners", "binary.dat", "--json")
+        self.assertEqual(result.returncode, 1)
+        self.assertIn("binary", json.loads(result.stderr)["error"])
+
     def test_wide_and_combining_text_fits_boxes_and_no_color_presence_is_respected(self):
         import unicodedata
         self.write("file.py")
@@ -49,6 +91,10 @@ class RegressionTests(RepositoryCase):
         self.addCleanup(shutil.rmtree, clone, True)
         subprocess.run(["git", "clone", "--depth=1", self.repo.as_uri(), str(clone)], check=True, capture_output=True)
         result = self.payload("ancestry", "file.py", "--repo", str(clone))
+        blame = self.payload("owners", "file.py", "--repo", str(clone))
+        self.assertTrue(blame["shallow"])
+        self.assertTrue(blame["warnings"])
+        self.assertGreater(blame["owners"][0]["boundary_lines"], 0)
         self.assertTrue(result["shallow"])
         self.assertFalse(result["history_complete"])
         self.assertIn("Shallow", " ".join(result["warnings"]))

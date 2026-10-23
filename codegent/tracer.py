@@ -92,7 +92,8 @@ class GitTracer:
             args = [args[0], "--ignore-all-space", *args[1:]]
         if self.mailmap and args and args[0] == "log":
             args = [arg.replace("%an", "%aN").replace("%ae", "%aE") if arg.startswith("--format=") else arg for arg in args]
-        cmd = ["git", "--literal-pathspecs", "-C", self.repo, *args]
+        cmd = ["git", "-c", "color.ui=false", "-c", "log.showSignature=false",
+               "-c", "i18n.logOutputEncoding=UTF-8", "--literal-pathspecs", "-C", self.repo, *args]
         try:
             result = subprocess.run(
                 cmd,
@@ -258,6 +259,8 @@ class GitTracer:
             raise GitError("line ownership is unavailable for binary files")
         file_lines = source.count("\n") + int(bool(source) and not source.endswith("\n"))
         args = ["blame", "--line-porcelain"]
+        if self.ignore_whitespace:
+            args.append("-w")
         if lines:
             match = re.fullmatch(r"([1-9][0-9]*):([1-9][0-9]*)", lines)
             if not match:
@@ -272,21 +275,27 @@ class GitTracer:
         for line in self.git(args).split("\n"):
             if re.match(r"^[0-9a-f]{40,64} ", line):
                 current = {"commit": line.split(" ", 1)[0]}
+            elif line == "boundary":
+                current["boundary"] = "true"
             elif line.startswith("author "):
                 current["name"] = line[7:]
             elif line.startswith("author-mail "):
                 current["email"] = line[12:].strip("<>")
             elif line.startswith("\t"):
                 identity = f"{current['name']} <{current['email']}>"
-                row = owners.setdefault(identity, {"author": identity, "lines": 0, "commits": set()})
+                row = owners.setdefault(identity, {"author": identity, "lines": 0, "boundary_lines": 0, "commits": set()})
                 row["lines"] += 1
+                row["boundary_lines"] += int(current.get("boundary") == "true")
                 row["commits"].add(current["commit"])
         total = sum(row["lines"] for row in owners.values())
         rows = sorted(owners.values(), key=lambda row: (-row["lines"], row["author"]))
         for row in rows:
             row["commits"] = sorted(row["commits"])
             row["percentage"] = round(row["lines"] * 100 / total, 2) if total else 0
+        shallow = self.git(["rev-parse", "--is-shallow-repository"]).strip() == "true"
+        warnings = ["Shallow repository: blame may attribute older lines to a boundary commit."] if shallow else []
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": commit,
+                "shallow": shallow, "history_complete": not shallow, "warnings": warnings,
                 "file_lines": file_lines, "selected_lines": total, "line_range": lines,
                 "owners": rows, "attribution": "Git blame at the selected commit; not code quality or legal ownership"}
 
