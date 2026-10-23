@@ -180,6 +180,10 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     files.add_argument("--limit", type=positive_int, default=1000)
     files.add_argument("--sort", choices=("path", "size"), default="path")
     files.add_argument("--kind", choices=("all", "file", "executable", "symlink", "submodule"), default="all")
+    files.add_argument("--min-bytes", type=nonnegative_int, help="Minimum known blob size (inclusive)")
+    files.add_argument("--max-bytes", type=nonnegative_int, help="Maximum known blob size (inclusive)")
+    files.add_argument("--include", action="append", default=[], help="Include a root-relative path glob (repeatable, OR)")
+    files.add_argument("--exclude", action="append", default=[], help="Exclude a root-relative path glob (repeatable)")
     files.set_defaults(handler=_cmd_files)
 
     source = subparsers.add_parser("source", parents=[common], help="Preview a bounded text blob at a commit")
@@ -194,6 +198,10 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     refs = subparsers.add_parser("refs", parents=[common], help="Browse branch, tag, and remote-tracking references")
     refs.add_argument("--kind", choices=("all", "branch", "tag", "remote"), default="all")
     refs.add_argument("--limit", type=positive_int, default=1000)
+    refs.add_argument("--contains", help="Only refs whose commit history contains this revision")
+    refs.add_argument("--points-at", help="Only refs pointing at this commit, including annotated tags")
+    refs.add_argument("--sort", choices=("name", "version", "date"), default="name", help="Ref name, Git version order, or newest creator date")
+    refs.add_argument("--match", action="append", default=[], dest="patterns", help="Include a case-sensitive short ref-name glob (repeatable, OR)")
     refs.set_defaults(handler=_cmd_refs)
 
     commits = subparsers.add_parser("commits", parents=[common], help="List commits reachable from TARGET but not BASE")
@@ -424,7 +432,7 @@ def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
 
 
 def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).tracked_files(args.path, args.ref, limit=args.limit, sort=args.sort, kind=args.kind)
+    report = _tracer(args).tracked_files(args.path, args.ref, limit=args.limit, sort=args.sort, kind=args.kind, min_bytes=args.min_bytes, max_bytes=args.max_bytes, includes=args.include, excludes=args.exclude)
     return report if args.json_output or args.markdown or args.csv_output else render_files(report)
 
 
@@ -439,7 +447,7 @@ def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).refs(kind=args.kind, limit=args.limit)
+    report = _tracer(args).refs(kind=args.kind, limit=args.limit, contains=args.contains, points_at=args.points_at, sort=args.sort, patterns=args.patterns)
     return report if args.json_output or args.markdown or args.csv_output else render_refs(report)
 
 

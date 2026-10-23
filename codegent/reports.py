@@ -202,7 +202,7 @@ def render_cochange(report: dict[str, Any]) -> str:
 def render_files(report: dict[str, Any]) -> str:
     lines = [f"Tracked files: {report['path']} at {report['resolved_ref'][:12]}", "Mode  Type  Bytes  Path"]
     lines.extend(f"{row['mode']}  {row['type']}  {row['size'] if row['size'] is not None else '-'}  {row['path']}" for row in report["files"])
-    lines.append(f"Showing {len(report['files'])} of {report['matching_files']} matching entries ({report['total_files']} before kind filter)")
+    lines.append(f"Showing {len(report['files'])} of {report['matching_files']} matching entries ({report['total_files']} before filters)")
     return "\n".join(lines) + "\n"
 
 

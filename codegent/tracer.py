@@ -10,6 +10,7 @@ import sys
 from ._version import __version__
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
+from fnmatch import fnmatchcase
 from typing import Any
 
 from .models import Bloodline, CommitNode
@@ -36,6 +37,11 @@ def positive_count(value: int | None, name: str, *, allow_none: bool = False) ->
         return
     if type(value) is not int or value <= 0:
         raise GitError(f"{name} must be a positive integer" + (" or None" if allow_none else ""))
+
+
+def nonnegative_count(value: int, name: str) -> None:
+    if type(value) is not int or value < 0:
+        raise GitError(f"{name} must be a nonnegative integer")
 
 
 def iso_date(value: str) -> str:
@@ -324,14 +330,22 @@ class GitTracer:
             mailmap=self.mailmap,
         )
 
-    def refs(self, *, kind: str = "all", limit: int = 1000) -> dict[str, Any]:
+    def refs(self, *, kind: str = "all", limit: int = 1000, contains: str | None = None, points_at: str | None = None, sort: str = "name", patterns: list[str] | None = None) -> dict[str, Any]:
         positive_count(limit, "limit")
         scopes = {"branch": ["refs/heads"], "tag": ["refs/tags"], "remote": ["refs/remotes"],
                   "all": ["refs/heads", "refs/tags", "refs/remotes"]}
         if kind not in scopes:
             raise GitError("ref kind must be branch, tag, remote, or all")
+        sorts = {"name": "refname", "version": "version:refname", "date": "-creatordate"}
+        if sort not in sorts:
+            raise GitError("ref sort must be name, version, or date")
         self.ensure_repository()
-        output = self.git(["for-each-ref", "--sort=refname",
+        contains_resolved = self.resolve_ref(contains) if contains is not None else None
+        points_at_resolved = self.resolve_ref(points_at) if points_at is not None else None
+        filters = [f"--contains={contains_resolved}"] if contains_resolved else []
+        if points_at_resolved:
+            filters.append(f"--points-at={points_at_resolved}")
+        output = self.git(["for-each-ref", *filters, "--sort=refname", f"--sort={sorts[sort]}",
                            "--format=%(refname)%00%(objectname)%00%(objecttype)%00%(*objectname)%00%(*objecttype)", *scopes[kind]])
         rows = []
         try:
@@ -346,7 +360,9 @@ class GitTracer:
                              "peeled_object_id": peeled or None, "peeled_type": peeled_type or None})
         except (ValueError, KeyError, IndexError) as exc:
             raise GitError("cannot parse Git reference metadata") from exc
-        return {"repo": self.repo, "kind": kind, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
+        scanned_refs = len(rows)
+        rows = [row for row in rows if not patterns or any(fnmatchcase(row["short_name"], pattern) for pattern in patterns)]
+        return {"repo": self.repo, "patterns": patterns or [], "scanned_refs": scanned_refs, "kind": kind, "contains": contains, "contains_resolved": contains_resolved, "points_at": points_at, "points_at_resolved": points_at_resolved, "sort": sort, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
 
     def doctor(self) -> dict[str, Any]:
         git_version = self.git(["--version"]).strip()
@@ -359,8 +375,13 @@ class GitTracer:
                 "working_tree_clean": not bool(self.git(["status", "--porcelain=v1", "-z"])),
                 "timeout_seconds": self.timeout}
 
-    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int = 1000, sort: str = "path", kind: str = "all") -> dict[str, Any]:
-        positive_count(limit, "limit")
+    def tracked_files(self, path: str = ".", ref: str = "HEAD", *, limit: int | None = 1000, sort: str = "path", kind: str = "all", min_bytes: int | None = None, max_bytes: int | None = None, includes: list[str] | None = None, excludes: list[str] | None = None) -> dict[str, Any]:
+        positive_count(limit, "limit", allow_none=True)
+        for bound, name in ((min_bytes, "min_bytes"), (max_bytes, "max_bytes")):
+            if bound is not None:
+                nonnegative_count(bound, name)
+        if min_bytes is not None and max_bytes is not None and min_bytes > max_bytes:
+            raise GitError("minimum file size must not exceed maximum")
         if sort not in {"path", "size"}:
             raise GitError("file sort must be path or size")
         path = self.normalize_path(path)
@@ -372,11 +393,18 @@ class GitTracer:
         files = self._parse_tree(output)
         total_files = len(files)
         files = [item for item in files if kind == "all" or item["mode"] == modes[kind]]
+        if min_bytes is not None or max_bytes is not None:
+            files = [item for item in files if item["size"] is not None
+                     and (min_bytes is None or item["size"] >= min_bytes)
+                     and (max_bytes is None or item["size"] <= max_bytes)]
+        files = [item for item in files
+                 if (not includes or any(fnmatchcase(item["path"], pattern) for pattern in includes))
+                 and not any(fnmatchcase(item["path"], pattern) for pattern in (excludes or []))]
         files.sort(key=lambda item: (item["path"],) if sort == "path" else (item["size"] is None, -(item["size"] or 0), item["path"]))
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
-                "sort": sort, "unknown_size_entries": sum(item["size"] is None for item in files),
+                "includes": includes or [], "excludes": excludes or [], "sort": sort, "min_bytes": min_bytes, "max_bytes": max_bytes, "unknown_size_entries": sum(item["size"] is None for item in files),
                 "kind": kind, "total_files": total_files, "matching_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
-                "truncated": len(files) > limit, "files": files[:limit]}
+                "truncated": limit is not None and len(files) > limit, "files": files[:limit]}
 
     def _parse_tree(self, output: str) -> list[dict[str, Any]]:
         try:
