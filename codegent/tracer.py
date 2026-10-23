@@ -275,7 +275,9 @@ class GitTracer:
             excluded = self.resolve_ref(exclude_ref)
             selection.update(excluded_ref=exclude_ref, excluded_resolved=excluded)
             args.append(f"^{excluded}")
-        args.extend(["--", path])
+        args.append("--")
+        if path != "." or follow is not None:
+            args.append(path)
 
         output = self.git(args)
         newest_commits = self._parse_log(output)

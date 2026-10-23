@@ -41,3 +41,22 @@ class RoundFourTests(RepositoryCase):
         self.assertIn("diff --git a/a b/a", patch)
         self.assertIn("--- a/a", patch)
         self.assertIn("+++ b/a", patch)
+
+    def test_repository_ranges_include_empty_commits_and_merges(self):
+        self.write("a")
+        base = self.commit()
+        self.git("commit", "--allow-empty", "-m", "empty checkpoint")
+        empty = self.git("rev-parse", "HEAD")
+        self.git("checkout", "-b", "side", base)
+        self.write("b")
+        self.commit("side change")
+        self.git("checkout", "main")
+        self.git("merge", "--no-ff", "side", "-m", "integration")
+        merged = self.git("rev-parse", "HEAD")
+        report = self.payload("commits", base, "HEAD")
+        hashes = {r["hash"] for r in report["commits"]}
+        self.assertIn(empty, hashes)
+        self.assertIn(merged, hashes)
+        self.assertEqual(report["total_commits"], 3)
+        scoped = self.payload("commits", base, "HEAD", "--path", "b")
+        self.assertEqual(scoped["total_commits"], 1)

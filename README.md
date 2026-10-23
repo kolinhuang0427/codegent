@@ -344,3 +344,5 @@ attribution. Python requirements remain 3.10+; runtime dependencies remain empty
 Blame reports reset implicitly configured `blame.ignoreRevsFile` entries. Only an explicitly supplied `owners --ignore-revs-file` changes attribution. Git still validates configured ignore files while reading its configuration.
 
 Unified patch previews explicitly use `a/` and `b/` prefixes and repository-root paths, independent of `diff.noprefix`, `diff.mnemonicPrefix`, or relative-display configuration.
+
+Repository-wide history and commit ranges include empty commits and merge commits. A literal file/directory scope still uses Git path-limited traversal and can omit commits that do not change that scope. Merge statistics follow Git's default history presentation.
