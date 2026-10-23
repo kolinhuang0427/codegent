@@ -190,6 +190,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     source.add_argument("path")
     source.add_argument("--lines", help="Inclusive START:END line range")
     source.add_argument("--max-bytes", type=positive_int, default=1048576)
+    source.add_argument("--context", type=nonnegative_int, default=0, help="Expand the selected line range on each side")
     source.set_defaults(handler=_cmd_source)
 
     doctor = subparsers.add_parser("doctor", parents=[common], help="Inspect Git and worktree readiness without changing files")
@@ -437,7 +438,7 @@ def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_source(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes)
+    report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes, context=args.context)
     return report if args.json_output or args.markdown or args.csv_output else render_source(report)
 
 

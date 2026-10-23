@@ -441,8 +441,11 @@ class GitTracer:
             raise GitError(f"{purpose} is unavailable for binary files")
         return content, size
 
-    def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576) -> dict[str, Any]:
+    def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576, context: int = 0) -> dict[str, Any]:
         positive_count(max_bytes, "max_bytes")
+        nonnegative_count(context, "context")
+        if context and not lines:
+            raise GitError("source context requires --lines")
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
         content, size = self._text_blob(resolved, path, max_bytes=max_bytes, purpose="source preview")
@@ -458,9 +461,11 @@ class GitTracer:
             start, end = map(int, match.groups())
             if start > end or end > len(file_lines):
                 raise GitError("line range is outside the file")
+        start, end = max(1, start - context), min(len(file_lines), end + context)
         selected = file_lines[start - 1:end]
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
-                "size": size, "file_lines": len(file_lines), "line_range": lines,
+                "size": size, "max_bytes": max_bytes, "file_lines": len(file_lines), "line_range": lines,
+                "context": context, "effective_line_range": f"{start}:{end}" if file_lines else None,
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 

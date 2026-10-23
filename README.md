@@ -364,3 +364,5 @@ History `--merges` selects commits with multiple parents; `--no-merges` excludes
 `files --min-bytes N --max-bytes N` uses inclusive known-size bounds, including zero-byte blobs. Unknown-size entries do not match an active size bound. Size filters precede sorting/limiting; totals describe matched entries. The Python inventory API accepts `limit=None` for complete aggregation.
 
 `files --include GLOB --exclude GLOB` matches root-relative tree paths with case-sensitive shell globs. Includes are alternatives; exclusions win. Glob, mode, and byte filters all run before sorting and limits. The positional path remains literal.
+
+`source FILE --lines START:END --context N` expands both sides of the requested range and clamps to the committed blob. Reports preserve the requested `line_range` and record `effective_line_range`, context, and byte budget. Context requires a line selection.

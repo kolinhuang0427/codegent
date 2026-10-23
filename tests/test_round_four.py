@@ -186,3 +186,14 @@ class RoundFourTests(RepositoryCase):
         self.assertEqual(report["total_bytes"], 7)
         self.assertTrue(report["truncated"])
         self.assertEqual(self.payload("files", "--include", "missing*")["matching_files"], 0)
+
+    def test_source_context_clamps_to_blob_and_preserves_requested_range(self):
+        self.write("a", "one\ntwo\nthree\nfour\nfive")
+        self.commit()
+        report = self.payload("source", "a", "--lines", "2:3", "--context", "1")
+        self.assertEqual(report["content"], "one\ntwo\nthree\nfour\n")
+        self.assertEqual(report["line_range"], "2:3")
+        self.assertEqual(report["effective_line_range"], "1:4")
+        self.assertEqual([r["number"] for r in report["lines"]], [1, 2, 3, 4])
+        self.assertEqual(self.payload("source", "a", "--lines", "5:5", "--context", "20")["content"], "one\ntwo\nthree\nfour\nfive")
+        self.assertEqual(self.cli("source", "a", "--context", "1").returncode, 1)
