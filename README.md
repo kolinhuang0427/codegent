@@ -421,3 +421,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `cochange DIRECTORY` matches commits touching that literal subtree, including rename sources, and lists only companions outside it. `cochange .` has no outside companions.
 
 `cochange --exclude "generated/*"` removes companion paths before limiting results while keeping the selected target-commit denominator. Repeat exclusions as needed.
+
+`cochange --min-fraction 0.5` keeps paths shared in at least half the selected target commits. Threshold comparison uses the unrounded fraction; `--min-shared` still applies.

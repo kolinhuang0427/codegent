@@ -59,3 +59,14 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["matching_files"], 1)
         self.assertEqual(report["files"][0]["path"], "keep")
         self.assertEqual(report["files"][0]["fraction"], 1)
+
+    def test_cochange_minimum_fraction_and_invalid_bounds(self):
+        self.write("target")
+        self.write("companion")
+        self.commit()
+        self.write("target", "changed")
+        self.commit()
+        self.assertEqual(self.payload("cochange", "target", "--min-fraction", "0.5")["matching_files"], 1)
+        self.assertEqual(self.payload("cochange", "target", "--min-fraction", "0.50001")["matching_files"], 0)
+        for value in ("nan", "inf", "-0.1", "1.1"):
+            self.assertEqual(self.cli("cochange", "target", "--min-fraction", value).returncode, 2)
