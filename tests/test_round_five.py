@@ -49,3 +49,13 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["target_commits"], 1)
         self.assertEqual([r["path"] for r in report["files"]], ["src2/outside"])
         self.assertEqual(self.payload("cochange", ".")["files"], [])
+
+    def test_cochange_exclusions_keep_the_target_denominator(self):
+        for path in ("target", "generated/a", "docs/a", "keep"):
+            self.write(path)
+        self.commit()
+        report = self.payload("cochange", "target", "--exclude", "generated/*", "--exclude", "docs/*", "--limit", "1")
+        self.assertEqual(report["target_commits"], 1)
+        self.assertEqual(report["matching_files"], 1)
+        self.assertEqual(report["files"][0]["path"], "keep")
+        self.assertEqual(report["files"][0]["fraction"], 1)

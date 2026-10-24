@@ -419,3 +419,5 @@ Standalone skin-tone modifiers after ordinary text occupy their own terminal cel
 Explicit empty `--lines ""` values are errors for `source` and `owners`; omit the option to select the whole file.
 
 `cochange DIRECTORY` matches commits touching that literal subtree, including rename sources, and lists only companions outside it. `cochange .` has no outside companions.
+
+`cochange --exclude "generated/*"` removes companion paths before limiting results while keeping the selected target-commit denominator. Repeat exclusions as needed.
