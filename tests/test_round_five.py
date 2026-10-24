@@ -151,3 +151,18 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["groups"][0]["group"], ".py")
         self.assertEqual(report["filters"]["kind"], "file")
         self.assertEqual(self.cli("inventory", "--min-bytes", "4", "--max-bytes", "3").returncode, 1)
+
+    def test_inventory_largest_known_object_distinguishes_zero_from_unknown(self):
+        self.write("a.py", "abc")
+        self.write("b.py", "abcdef")
+        self.write("empty.txt", "")
+        self.commit()
+        oid = self.git("rev-parse", "HEAD")
+        self.git("update-index", "--add", "--cacheinfo", f"160000,{oid},module")
+        self.git("commit", "-m", "gitlink")
+        report = self.payload("inventory")
+        groups = {r["group"]: r for r in report["groups"]}
+        self.assertEqual(groups[".py"]["largest_known_bytes"], 6)
+        self.assertEqual(groups[".txt"]["largest_known_bytes"], 0)
+        self.assertIsNone(groups["(none)"]["largest_known_bytes"])
+        self.assertIn("Largest known bytes", self.cli("inventory", "--markdown").stdout)

@@ -54,8 +54,8 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
             [row[key] for key in ("side", "ref", "resolved_ref", "unique_commits")] for row in report["sides"]])
     elif command == "inventory":
         lines += [f"Entries: {report['total_entries']} selected of {report['unfiltered_entries']} before filters; filters: {_cell(report['filters'])}.", ""]
-        lines += _table(["Group", "Entries", "Known bytes", "Unknown sizes"], [
-            [row[key] for key in ("group", "entries", "known_bytes", "unknown_size_entries")] for row in report["groups"]])
+        lines += _table(["Group", "Entries", "Known bytes", "Largest known bytes", "Unknown sizes"], [
+            [row[key] for key in ("group", "entries", "known_bytes", "largest_known_bytes", "unknown_size_entries")] for row in report["groups"]])
         lines += ["", f"Showing {len(report['groups'])} of {report['total_groups']} groups.", _cell(report["interpretation"])]
     elif command == "directories":
         lines += _table(["Directory", "Commits", "Authors", "Files", "Churn"], [
@@ -123,7 +123,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
 # Schemas retain meaningful headers even when a report has no data rows.
 _CSV_TABLES = {
     "divergence": ("sides", ("side", "ref", "resolved_ref", "unique_commits")),
-    "inventory": ("groups", ("group", "entries", "known_bytes", "unknown_size_entries", "modes")),
+    "inventory": ("groups", ("group", "entries", "known_bytes", "largest_known_bytes", "unknown_size_entries", "modes")),
     "directories": ("directories", ("path", "commits", "authors", "files", "additions", "deletions", "churn", "binary_changes")),
     "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
     "hotspots": ("files", ("path", "commits", "authors", "churn", "binary_changes", "first_changed", "last_changed")),
