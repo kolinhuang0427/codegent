@@ -445,3 +445,5 @@ Inventory groups include `largest_known_bytes`: the largest committed blob in th
 `files --reverse` reverses the complete selected ordering (including ties and unknown-size placement) before applying `--limit`. With `--sort size`, this puts the smallest known blobs last only in default descending order; reversed order is the exact inverse.
 
 `source PATH --tail 20 --ref REV` previews the last 20 committed lines with original line numbers. It preserves an unterminated last line and clamps to the file length. Tail cannot be combined with a range or context; the blob byte budget still applies.
+
+`refs --match "work/*" --exclude "work/archive/*"` includes and then excludes short reference names before applying `--limit`. Exclusions are repeatable and case-sensitive.

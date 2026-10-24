@@ -197,3 +197,14 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(self.payload("source", "empty", "--tail", "2")["lines"], [])
         self.assertEqual(self.cli("source", "a", "--tail", "1", "--lines", "1:1").returncode, 2)
         self.assertEqual(self.cli("source", "a", "--tail", "1", "--context", "1").returncode, 1)
+
+    def test_ref_exclusions_precede_limits_and_override_inclusions(self):
+        self.write("a")
+        self.commit()
+        for branch in ("work/a", "work/b", "release"):
+            self.git("branch", branch)
+        report = self.payload("refs", "--kind", "branch", "--match", "work/*", "--exclude", "*/a", "--limit", "1")
+        self.assertEqual(report["scanned_refs"], 4)
+        self.assertEqual(report["total_refs"], 1)
+        self.assertEqual(report["refs"][0]["short_name"], "work/b")
+        self.assertFalse(report["truncated"])

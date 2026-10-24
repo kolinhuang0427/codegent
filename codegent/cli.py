@@ -224,6 +224,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     refs.add_argument("--contains", help="Only refs whose commit history contains this revision")
     refs.add_argument("--points-at", help="Only refs pointing at this commit, including annotated tags")
     refs.add_argument("--sort", choices=("name", "version", "date"), default="name", help="Ref name, Git version order, or newest creator date")
+    refs.add_argument("--exclude", action="append", default=[], help="Exclude short ref-name globs after matching (repeatable)")
     refs.add_argument("--match", action="append", default=[], dest="patterns", help="Include a case-sensitive short ref-name glob (repeatable, OR)")
     refs.set_defaults(handler=_cmd_refs)
 
@@ -512,7 +513,7 @@ def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).refs(kind=args.kind, limit=args.limit, contains=args.contains, points_at=args.points_at, sort=args.sort, patterns=args.patterns)
+    report = _tracer(args).refs(kind=args.kind, limit=args.limit, contains=args.contains, points_at=args.points_at, sort=args.sort, patterns=args.patterns, excludes=args.exclude)
     return report if args.json_output or args.markdown or args.csv_output else render_refs(report)
 
 

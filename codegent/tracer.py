@@ -393,7 +393,7 @@ class GitTracer:
             mailmap=self.mailmap,
         )
 
-    def refs(self, *, kind: str = "all", limit: int = 1000, contains: str | None = None, points_at: str | None = None, sort: str = "name", patterns: list[str] | None = None) -> dict[str, Any]:
+    def refs(self, *, kind: str = "all", limit: int = 1000, contains: str | None = None, points_at: str | None = None, sort: str = "name", patterns: list[str] | None = None, excludes: list[str] | None = None) -> dict[str, Any]:
         positive_count(limit, "limit")
         scopes = {"branch": ["refs/heads"], "tag": ["refs/tags"], "remote": ["refs/remotes"],
                   "all": ["refs/heads", "refs/tags", "refs/remotes"]}
@@ -424,8 +424,10 @@ class GitTracer:
         except (ValueError, KeyError, IndexError) as exc:
             raise GitError("cannot parse Git reference metadata") from exc
         scanned_refs = len(rows)
-        rows = [row for row in rows if not patterns or any(fnmatchcase(row["short_name"], pattern) for pattern in patterns)]
-        return {"repo": self.repo, "patterns": patterns or [], "scanned_refs": scanned_refs, "kind": kind, "contains": contains, "contains_resolved": contains_resolved, "points_at": points_at, "points_at_resolved": points_at_resolved, "sort": sort, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
+        rows = [row for row in rows
+                if (not patterns or any(fnmatchcase(row["short_name"], pattern) for pattern in patterns))
+                and not any(fnmatchcase(row["short_name"], pattern) for pattern in (excludes or []))]
+        return {"repo": self.repo, "patterns": patterns or [], "excludes": excludes or [], "scanned_refs": scanned_refs, "kind": kind, "contains": contains, "contains_resolved": contains_resolved, "points_at": points_at, "points_at_resolved": points_at_resolved, "sort": sort, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
 
     def doctor(self) -> dict[str, Any]:
         git_version = self.git(["--version"]).strip()
