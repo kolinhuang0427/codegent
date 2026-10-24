@@ -393,8 +393,10 @@ class GitTracer:
             mailmap=self.mailmap,
         )
 
-    def refs(self, *, kind: str = "all", limit: int = 1000, contains: str | None = None, points_at: str | None = None, sort: str = "name", patterns: list[str] | None = None, excludes: list[str] | None = None) -> dict[str, Any]:
+    def refs(self, *, kind: str = "all", limit: int = 1000, contains: str | None = None, points_at: str | None = None, sort: str = "name", patterns: list[str] | None = None, excludes: list[str] | None = None, object_type: str | None = None) -> dict[str, Any]:
         positive_count(limit, "limit")
+        if object_type is not None and object_type not in {"commit", "tag", "tree", "blob"}:
+            raise GitError("ref object type must be commit, tag, tree, or blob")
         scopes = {"branch": ["refs/heads"], "tag": ["refs/tags"], "remote": ["refs/remotes"],
                   "all": ["refs/heads", "refs/tags", "refs/remotes"]}
         if kind not in scopes:
@@ -415,19 +417,20 @@ class GitTracer:
             for record in output.split("\n"):
                 if not record:
                     continue
-                name, oid, object_type, peeled, peeled_type = record.split("\0")
+                name, oid, stored_type, peeled, peeled_type = record.split("\0")
                 namespace = name.split("/")[1]
                 rows.append({"ref": name, "short_name": "/".join(name.split("/")[2:]),
                              "kind": {"heads": "branch", "tags": "tag", "remotes": "remote"}[namespace],
-                             "object_id": oid, "object_type": object_type,
+                             "object_id": oid, "object_type": stored_type,
                              "peeled_object_id": peeled or None, "peeled_type": peeled_type or None})
         except (ValueError, KeyError, IndexError) as exc:
             raise GitError("cannot parse Git reference metadata") from exc
         scanned_refs = len(rows)
         rows = [row for row in rows
-                if (not patterns or any(fnmatchcase(row["short_name"], pattern) for pattern in patterns))
+                if (object_type is None or row["object_type"] == object_type)
+                and (not patterns or any(fnmatchcase(row["short_name"], pattern) for pattern in patterns))
                 and not any(fnmatchcase(row["short_name"], pattern) for pattern in (excludes or []))]
-        return {"repo": self.repo, "patterns": patterns or [], "excludes": excludes or [], "scanned_refs": scanned_refs, "kind": kind, "contains": contains, "contains_resolved": contains_resolved, "points_at": points_at, "points_at_resolved": points_at_resolved, "sort": sort, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
+        return {"repo": self.repo, "object_type": object_type, "patterns": patterns or [], "excludes": excludes or [], "scanned_refs": scanned_refs, "kind": kind, "contains": contains, "contains_resolved": contains_resolved, "points_at": points_at, "points_at_resolved": points_at_resolved, "sort": sort, "total_refs": len(rows), "truncated": len(rows) > limit, "refs": rows[:limit]}
 
     def doctor(self) -> dict[str, Any]:
         git_version = self.git(["--version"]).strip()
