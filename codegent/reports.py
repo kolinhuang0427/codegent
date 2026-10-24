@@ -60,7 +60,7 @@ def render_authors(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1, excludes: list[str] | None = None, current_paths: set[str] | None = None) -> dict[str, Any]:
+def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", min_commits: int = 1, excludes: list[str] | None = None, current_paths: set[str] | None = None, includes: list[str] | None = None) -> dict[str, Any]:
     positive_count(limit, "limit")
     positive_count(min_commits, "min_commits")
     if sort not in {"commits", "churn", "authors", "recent"}:
@@ -86,6 +86,7 @@ def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", 
         row["churn"] = row["additions"] + row["deletions"]
     rows = sorted((row for row in files.values() if row["commits"] >= min_commits
                    and (current_paths is None or row["path"] in current_paths)
+                   and (not includes or any(fnmatchcase(row["path"], pattern) for pattern in includes))
                    and not any(fnmatchcase(row["path"], pattern) for pattern in (excludes or []))),
                   key=lambda row: (0 if sort == "recent" else -row[sort], row["path"]))
     if sort == "recent":
@@ -94,7 +95,7 @@ def hotspot_report(history: Bloodline, *, limit: int = 20, sort: str = "churn", 
         "repo": history.repo, "path": history.path, "requested_ref": history.requested_ref, "resolved_ref": history.resolved_ref,
         "history_complete": history.history_complete, "warnings": history.warnings,
         "selection": history.selection, "scanned_commits": len(history.commits),
-        "matching_files": len(rows), "files": rows[:limit], "sort": sort, "excludes": excludes or [], "current_only": current_paths is not None,
+        "matching_files": len(rows), "files": rows[:limit], "sort": sort, "includes": includes or [], "excludes": excludes or [], "current_only": current_paths is not None,
         "date_basis": "UTC committer dates within selected history",
         "path_policy": "historical names are counted separately across renames",
     }

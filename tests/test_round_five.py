@@ -83,3 +83,12 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["files"][1]["candidate_commits"], 2)
         for fmt in ("--markdown", "--csv", "--no-color"):
             self.assertIn("jaccard", self.cli("cochange", "target", fmt).stdout.lower())
+
+    def test_hotspot_inclusions_are_or_combined_before_exclusions(self):
+        for path in ("src/a.py", "tests/a.py", "src/vendor.py", "docs/readme"):
+            self.write(path)
+        self.commit()
+        report = self.payload("hotspots", "--include", "src/*", "--include", "tests/*", "--exclude", "*vendor*", "--limit", "1")
+        self.assertEqual(report["matching_files"], 2)
+        self.assertEqual(report["files"][0]["path"], "src/a.py")
+        self.assertEqual(report["includes"], ["src/*", "tests/*"])

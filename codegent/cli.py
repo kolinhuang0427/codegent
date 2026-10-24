@@ -155,6 +155,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     hotspots = subparsers.add_parser("hotspots", parents=[common], help="Rank historical paths by change activity")
     hotspots.add_argument("path", nargs="?", default=".")
     hotspots.add_argument("--current-only", action="store_true", help="Keep only paths present at the selected tip")
+    hotspots.add_argument("--include", action="append", default=[], help="Include historical path globs (repeatable, OR)")
     hotspots.add_argument("--exclude", action="append", default=[], help="Exclude a root-relative path glob (repeatable)")
     hotspots.add_argument("--sort", choices=("churn", "commits", "authors", "recent"), default="churn")
     hotspots.add_argument("--limit", type=positive_int, default=20)
@@ -461,7 +462,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     current_paths = None
     if args.current_only:
         current_paths = set(tracer.git(["ls-tree", "-r", "--name-only", "-z", history.resolved_ref]).split("\0")) - {""}
-    report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits, excludes=args.exclude, current_paths=current_paths)
+    report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits, excludes=args.exclude, current_paths=current_paths, includes=args.include)
     return report if args.json_output or args.markdown or args.csv_output else render_hotspots(report)
 
 
