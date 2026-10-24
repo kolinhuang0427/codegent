@@ -528,8 +528,11 @@ class GitTracer:
             raise GitError(f"{purpose} is unavailable for binary files")
         return content, size
 
-    def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576, context: int = 0) -> dict[str, Any]:
+    def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576, context: int = 0, tail: int | None = None) -> dict[str, Any]:
         positive_count(max_bytes, "max_bytes")
+        positive_count(tail, "tail", allow_none=True)
+        if tail is not None and (lines is not None or context):
+            raise GitError("source tail cannot be combined with a line range or context")
         nonnegative_count(context, "context")
         if context and lines is None:
             raise GitError("source context requires --lines")
@@ -540,7 +543,7 @@ class GitTracer:
         file_lines = [part + "\n" for part in parts[:-1]]
         if parts[-1]:
             file_lines.append(parts[-1])
-        start, end = 1, len(file_lines)
+        start, end = (max(1, len(file_lines) - tail + 1) if tail is not None else 1), len(file_lines)
         if lines is not None:
             match = re.fullmatch(r"([1-9][0-9]*):([1-9][0-9]*)", lines)
             if not match:
@@ -552,7 +555,7 @@ class GitTracer:
         selected = file_lines[start - 1:end]
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
                 "size": size, "max_bytes": max_bytes, "file_lines": len(file_lines), "line_range": lines,
-                "context": context, "effective_line_range": f"{start}:{end}" if file_lines else None,
+                "context": context, "tail": tail, "effective_line_range": f"{start}:{end}" if file_lines else None,
                 "content": "".join(selected),
                 "lines": [{"number": start + i, "text": line.removesuffix("\n")} for i, line in enumerate(selected)]}
 

@@ -208,7 +208,9 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     source = subparsers.add_parser("source", parents=[common], help="Preview a bounded text blob at a commit")
     source.add_argument("path")
-    source.add_argument("--lines", help="Inclusive START:END line range")
+    source_range = source.add_mutually_exclusive_group()
+    source_range.add_argument("--lines", help="Inclusive START:END line range")
+    source_range.add_argument("--tail", type=positive_int, help="Preview the last N lines of the selected committed blob")
     source.add_argument("--max-bytes", type=positive_int, default=1048576)
     source.add_argument("--context", type=nonnegative_int, default=0, help="Expand the selected line range on each side")
     source.set_defaults(handler=_cmd_source)
@@ -500,7 +502,7 @@ def _cmd_files(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_source(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes, context=args.context)
+    report = _tracer(args).source(args.path, args.ref, lines=args.lines, max_bytes=args.max_bytes, context=args.context, tail=args.tail)
     return report if args.json_output or args.markdown or args.csv_output else render_source(report)
 
 
