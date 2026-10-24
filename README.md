@@ -449,3 +449,5 @@ Inventory groups include `largest_known_bytes`: the largest committed blob in th
 `refs --match "work/*" --exclude "work/archive/*"` includes and then excludes short reference names before applying `--limit`. Exclusions are repeatable and case-sensitive.
 
 `refs --object-type tag` selects annotated tags by their stored object type. `commit` includes branches and lightweight commit tags; `blob` and `tree` select direct object tags. The peeled type remains separately visible.
+
+Author CSV exports retain identity variants, binary-change count and first/last observed dates in their fixed schema, including when thresholds produce an empty result.
