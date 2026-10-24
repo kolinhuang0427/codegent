@@ -137,3 +137,17 @@ class MaintainerRefinements(RepositoryCase):
             report = self.payload("directories", "--sort", metric, "--limit", "1")
             self.assertEqual(report["directories"][0]["path"], "z")
             self.assertEqual(report["directories"][0][metric], 2)
+
+    def test_inventory_filters_select_objects_before_grouping(self):
+        self.write("src/a.py", "abc")
+        self.write("src/skip.py", "abcd")
+        self.write("src/b.txt", "longer")
+        self.write("docs/a.py", "abc")
+        self.commit()
+        report = self.payload("inventory", "--include", "src/*", "--exclude", "*skip*", "--min-bytes", "3", "--max-bytes", "4", "--kind", "file")
+        self.assertEqual(report["total_entries"], 1)
+        self.assertEqual(report["unfiltered_entries"], 4)
+        self.assertEqual(report["known_bytes"], 3)
+        self.assertEqual(report["groups"][0]["group"], ".py")
+        self.assertEqual(report["filters"]["kind"], "file")
+        self.assertEqual(self.cli("inventory", "--min-bytes", "4", "--max-bytes", "3").returncode, 1)

@@ -365,7 +365,9 @@ def inventory_report(snapshot: dict[str, Any], *, group_by: str = "extension", d
     rows = sorted(groups.values(), key=lambda row: (0 if sort == "name" else -row[metric], row["group"]))
     return {"repo": snapshot["repo"], "path": snapshot["path"], "requested_ref": snapshot["requested_ref"],
             "resolved_ref": snapshot["resolved_ref"], "group_by": group_by, "depth": depth, "sort": sort,
-            "total_entries": snapshot["matching_files"], "known_bytes": snapshot["total_bytes"],
+            "total_entries": snapshot["matching_files"], "unfiltered_entries": snapshot["total_files"],
+            "filters": {key: snapshot[key] for key in ("kind", "includes", "excludes", "min_bytes", "max_bytes")},
+            "known_bytes": snapshot["total_bytes"],
             "unknown_size_entries": snapshot["unknown_size_entries"], "total_groups": len(rows), "groups": rows[:limit],
             "interpretation": "committed Git object bytes, including symlink contents; not checkout disk usage"}
 
@@ -375,6 +377,7 @@ def render_inventory(report: dict[str, Any]) -> str:
     lines = [f"Tree inventory: {report['path']} at {report['resolved_ref'][:12]}", "Entries  Known bytes  Unknown sizes  Group"]
     lines.extend(f"{r['entries']:7}  {r['known_bytes']:11}  {r['unknown_size_entries']:13}  {r['group']}" for r in report["groups"])
     lines.append(f"Showing {len(report['groups'])} of {report['total_groups']} groups")
+    lines.append(f"Entries: {report['total_entries']} selected of {report['unfiltered_entries']} before filters; filters: {report['filters']}")
     lines.append(report["interpretation"])
     return "\n".join(lines) + "\n"
 

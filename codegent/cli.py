@@ -252,6 +252,11 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     inventory = subparsers.add_parser("inventory", parents=[common], help="Summarize committed object sizes by extension or directory")
     inventory.add_argument("path", nargs="?", default=".")
+    inventory.add_argument("--kind", choices=("all", "file", "executable", "symlink", "submodule"), default="all")
+    inventory.add_argument("--include", action="append", default=[], help="Include root-relative file globs before grouping")
+    inventory.add_argument("--exclude", action="append", default=[], help="Exclude root-relative file globs before grouping")
+    inventory.add_argument("--min-bytes", type=nonnegative_int)
+    inventory.add_argument("--max-bytes", type=nonnegative_int)
     inventory.add_argument("--group-by", choices=("extension", "directory"), default="extension")
     inventory.add_argument("--depth", type=positive_int, default=1)
     inventory.add_argument("--limit", type=positive_int, default=20)
@@ -532,7 +537,7 @@ def _cmd_directories(args: argparse.Namespace, color: bool) -> dict[str, Any] | 
 
 
 def _cmd_inventory(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    snapshot = _tracer(args).tracked_files(args.path, args.ref, limit=None)
+    snapshot = _tracer(args).tracked_files(args.path, args.ref, limit=None, kind=args.kind, includes=args.include, excludes=args.exclude, min_bytes=args.min_bytes, max_bytes=args.max_bytes)
     report = inventory_report(snapshot, group_by=args.group_by, depth=args.depth, sort=args.sort, limit=args.limit)
     return report if args.json_output or args.markdown or args.csv_output else render_inventory(report)
 
