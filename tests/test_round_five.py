@@ -18,3 +18,15 @@ class MaintainerRefinements(RepositoryCase):
         result = self.cli("trace", "a", "--no-color")
         rows = [line for line in result.stdout.splitlines() if line.startswith(("  ╭", "  │", "  ╰"))]
         self.assertEqual(len({display_width(line) for line in rows}), 1)
+
+    def test_standalone_skin_tone_does_not_consume_ascii_width(self):
+        self.assertEqual(display_width("A🏽"), 3)
+        self.assertEqual(display_width("👍🏽"), 2)
+        self.assertEqual(display_width("🚀🏽"), 4)
+        self.assertEqual(display_width("☝️🏽"), 2)
+        self.assertEqual(truncate_cells("A🏽abcd", 6), "A🏽...")
+        self.write("a")
+        self.commit("A🏽")
+        result = self.cli("trace", "a", "--no-color")
+        rows = [line for line in result.stdout.splitlines() if line.startswith(("  ╭", "  │", "  ╰"))]
+        self.assertEqual(len({display_width(line) for line in rows}), 1)

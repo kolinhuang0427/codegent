@@ -413,3 +413,5 @@ File history now establishes rename-followed lineage before applying author, mes
 Terminal rendering preserves structural diff-stat line breaks, labels incomplete-history boundaries distinctly, and escapes directional marks alongside bidi overrides. Cell-width and truncation logic keeps common combining, emoji-presentation, modifier, flag, keycap, and joined-emoji sequences intact. Terminal font and Unicode-version differences can still affect display width.
 
 Terminal layout measures neutral supplementary symbols by Unicode cell width while retaining two-cell regional flag pairs.
+
+Standalone skin-tone modifiers after ordinary text occupy their own terminal cells; supported emoji modifier sequences remain intact.
