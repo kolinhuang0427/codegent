@@ -202,7 +202,9 @@ def cochange_report(history: Bloodline, path: str, *, limit: int = 20, min_share
     counts: dict[str, int] = {}
     target_commits = 0
     for commit in history.commits:
-        matches = lambda item: item["path"] == path or item.get("renamed_from") == path
+        def in_scope(candidate):
+            return candidate is not None and (path == "." or candidate == path or candidate.startswith(path + "/"))
+        matches = lambda item: in_scope(item["path"]) or in_scope(item.get("renamed_from"))
         if not any(matches(item) for item in commit.changes):
             continue
         target_commits += 1

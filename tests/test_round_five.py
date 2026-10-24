@@ -39,3 +39,13 @@ class MaintainerRefinements(RepositoryCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("START:END", json.loads(result.stderr)["error"])
             self.assertEqual(self.payload(command, "a")["file_lines"], 3)
+
+    def test_cochange_directory_scope_excludes_its_own_children(self):
+        self.write("src/a")
+        self.write("src/b")
+        self.write("src2/outside")
+        self.commit()
+        report = self.payload("cochange", "src")
+        self.assertEqual(report["target_commits"], 1)
+        self.assertEqual([r["path"] for r in report["files"]], ["src2/outside"])
+        self.assertEqual(self.payload("cochange", ".")["files"], [])
