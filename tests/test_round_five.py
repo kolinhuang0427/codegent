@@ -103,3 +103,13 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["min_churn"], 3)
         self.assertEqual(self.payload("hotspots", "--min-churn", "0")["matching_files"], 3)
         self.assertEqual(self.cli("hotspots", "--min-churn", "-1").returncode, 2)
+
+    def test_directory_exclusions_apply_to_files_before_aggregation(self):
+        self.write("src/a", "one\n")
+        self.write("src/generated/b", "one\ntwo\nthree\n")
+        self.write("docs/a")
+        self.commit()
+        report = self.payload("directories", "--exclude", "src/generated/*", "--exclude", "docs/*")
+        self.assertEqual(report["total_directories"], 1)
+        self.assertEqual(report["directories"][0]["churn"], 1)
+        self.assertEqual(report["directories"][0]["files"], 1)

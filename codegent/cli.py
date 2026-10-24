@@ -243,6 +243,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
 
     directories = subparsers.add_parser("directories", parents=[common], help="Aggregate historical activity by directory")
     directories.add_argument("path", nargs="?", default=".")
+    directories.add_argument("--exclude", action="append", default=[], help="Exclude historical file-path globs before grouping (repeatable)")
     directories.add_argument("--depth", type=positive_int, default=1)
     directories.add_argument("--limit", type=positive_int, default=20)
     directories.add_argument("--sort", choices=("churn", "commits", "path"), default="churn")
@@ -525,7 +526,7 @@ def _error(message: str, *, json_output: bool, color: bool) -> int:
 
 def _cmd_directories(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
     history = _tracer(args).repository_history(args.path, args.ref, **_history_options(args))
-    report = directory_report(history, depth=args.depth, limit=args.limit, sort=args.sort)
+    report = directory_report(history, depth=args.depth, limit=args.limit, sort=args.sort, excludes=args.exclude)
     return report if args.json_output or args.markdown or args.csv_output else render_directories(report)
 
 
