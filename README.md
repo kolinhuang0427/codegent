@@ -442,7 +442,7 @@ Inventory groups include `largest_known_bytes`: the largest committed blob in th
 
 `files --sort extension` groups paths by case-folded final extension, using the literal root-relative path for ties. Extensionless paths sort first; file limits apply afterward.
 
-`files --reverse` reverses the complete selected ordering (including ties and unknown-size placement) before applying `--limit`. With `--sort size`, this puts the smallest known blobs last only in default descending order; reversed order is the exact inverse.
+`files --reverse` reverses the complete selected ordering (including ties and unknown-size placement) before applying `--limit`. With `--sort size --reverse`, known blobs appear from smallest to largest after any unknown-size entries.
 
 `source PATH --tail 20 --ref REV` previews the last 20 committed lines with original line numbers. It preserves an unterminated last line and clamps to the file length. Tail cannot be combined with a range or context; the blob byte budget still applies.
 
@@ -451,3 +451,5 @@ Inventory groups include `largest_known_bytes`: the largest committed blob in th
 `refs --object-type tag` selects annotated tags by their stored object type. `commit` includes branches and lightweight commit tags; `blob` and `tree` select direct object tags. The peeled type remains separately visible.
 
 Author CSV exports retain identity variants, binary-change count and first/last observed dates in their fixed schema, including when thresholds produce an empty result.
+
+`authors --sort recent` ranks author groups by their latest selected author-date instant, normalized to UTC before comparison. Author identity is the deterministic tie-breaker and limits apply afterward.

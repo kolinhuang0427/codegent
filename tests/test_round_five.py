@@ -233,3 +233,13 @@ class MaintainerRefinements(RepositoryCase):
             self.assertIn(key, empty[0])
         self.assertEqual(empty[1][0], "false")
         self.assertEqual(populated[1][0], "true")
+
+    def test_author_recent_sort_compares_utc_instants_before_limit(self):
+        self.write("a", "first\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "A", "GIT_AUTHOR_EMAIL": "a@example.test", "GIT_AUTHOR_DATE": "2025-01-02T00:30:00+02:00"})
+        self.write("a", "first\nsecond\n")
+        self.commit(env={"GIT_AUTHOR_NAME": "Z", "GIT_AUTHOR_EMAIL": "z@example.test", "GIT_AUTHOR_DATE": "2025-01-01T23:00:00+00:00"})
+        report = self.payload("authors", "a", "--sort", "recent", "--limit", "1")
+        self.assertTrue(report["authors"][0]["author"].startswith("Z"))
+        self.assertEqual(report["total_authors"], 2)
+        self.assertEqual(report["displayed_authors"], 1)
