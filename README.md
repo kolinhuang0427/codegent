@@ -437,3 +437,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `directories --sort authors` ranks contributor breadth; `--sort files` ranks distinct historical destination paths. Equal metrics use root-relative directory names as deterministic ties.
 
 `inventory` accepts the same `--include`, `--exclude`, `--kind`, `--min-bytes` and `--max-bytes` snapshot filters as `files`. Filtering precedes complete group aggregation; reports disclose selected and unfiltered entry counts.
+
+Inventory groups include `largest_known_bytes`: the largest committed blob in the selected group, zero for empty blobs, and null if every entry has unknown size (such as gitlinks).

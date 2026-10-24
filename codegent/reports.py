@@ -356,7 +356,9 @@ def inventory_report(snapshot: dict[str, Any], *, group_by: str = "extension", d
     groups: dict[str, dict[str, Any]] = {}
     for item in snapshot["files"]:
         key = (posixpath.splitext(posixpath.basename(item["path"]))[1].casefold() or "(none)") if group_by == "extension" else ("/".join(item["path"].split("/")[:-1][:depth]) or ".")
-        row = groups.setdefault(key, {"group": key, "entries": 0, "known_bytes": 0, "unknown_size_entries": 0, "modes": {}})
+        row = groups.setdefault(key, {"group": key, "entries": 0, "known_bytes": 0, "unknown_size_entries": 0, "modes": {}, "largest_known_bytes": None})
+        if item["size"] is not None:
+            row["largest_known_bytes"] = max(row["largest_known_bytes"] or 0, item["size"])
         row["entries"] += 1
         row["known_bytes"] += item["size"] or 0
         row["unknown_size_entries"] += int(item["size"] is None)
@@ -374,8 +376,8 @@ def inventory_report(snapshot: dict[str, Any], *, group_by: str = "extension", d
 
 @safe_display
 def render_inventory(report: dict[str, Any]) -> str:
-    lines = [f"Tree inventory: {report['path']} at {report['resolved_ref'][:12]}", "Entries  Known bytes  Unknown sizes  Group"]
-    lines.extend(f"{r['entries']:7}  {r['known_bytes']:11}  {r['unknown_size_entries']:13}  {r['group']}" for r in report["groups"])
+    lines = [f"Tree inventory: {report['path']} at {report['resolved_ref'][:12]}", "Entries  Known bytes  Largest known  Unknown sizes  Group"]
+    lines.extend(f"{r['entries']:7}  {r['known_bytes']:11}  {str(r['largest_known_bytes']):>13}  {r['unknown_size_entries']:13}  {r['group']}" for r in report["groups"])
     lines.append(f"Showing {len(report['groups'])} of {report['total_groups']} groups")
     lines.append(f"Entries: {report['total_entries']} selected of {report['unfiltered_entries']} before filters; filters: {report['filters']}")
     lines.append(report["interpretation"])
