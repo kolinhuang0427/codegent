@@ -417,3 +417,5 @@ Terminal layout measures neutral supplementary symbols by Unicode cell width whi
 Standalone skin-tone modifiers after ordinary text occupy their own terminal cells; supported emoji modifier sequences remain intact.
 
 Explicit empty `--lines ""` values are errors for `source` and `owners`; omit the option to select the whole file.
+
+`cochange DIRECTORY` matches commits touching that literal subtree, including rename sources, and lists only companions outside it. `cochange .` has no outside companions.
