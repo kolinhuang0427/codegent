@@ -184,3 +184,16 @@ class MaintainerRefinements(RepositoryCase):
         self.assertTrue(report["reverse"])
         self.assertEqual(report["total_bytes"], 6)
         self.assertEqual(self.payload("files", "--sort", "size", "--reverse", "--limit", "1")["files"][0]["path"], "a")
+
+    def test_source_tail_preserves_numbers_and_unterminated_last_line(self):
+        self.write("a", "one\ntwo\nthree")
+        self.write("empty", "")
+        self.commit()
+        report = self.payload("source", "a", "--tail", "2")
+        self.assertEqual(report["content"], "two\nthree")
+        self.assertEqual(report["effective_line_range"], "2:3")
+        self.assertEqual([r["number"] for r in report["lines"]], [2, 3])
+        self.assertEqual(self.payload("source", "a", "--tail", "100")["content"], "one\ntwo\nthree")
+        self.assertEqual(self.payload("source", "empty", "--tail", "2")["lines"], [])
+        self.assertEqual(self.cli("source", "a", "--tail", "1", "--lines", "1:1").returncode, 2)
+        self.assertEqual(self.cli("source", "a", "--tail", "1", "--context", "1").returncode, 1)
