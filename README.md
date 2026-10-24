@@ -433,3 +433,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `directories --exclude "src/generated/*"` removes historical destination file paths before directory aggregation, including their churn, authors and touched-commit contribution.
 
 `directories --min-commits 2` filters aggregated directories before limiting. Exports distinguish all aggregated directories from those matching the threshold.
+
+`directories --sort authors` ranks contributor breadth; `--sort files` ranks distinct historical destination paths. Equal metrics use root-relative directory names as deterministic ties.

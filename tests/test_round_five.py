@@ -125,3 +125,15 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["matching_directories"], 1)
         self.assertEqual(report["directories"][0]["path"], "busy")
         self.assertIn("matching directories", self.cli("directories", "--min-commits", "2", "--markdown").stdout)
+
+    def test_directory_author_and_file_rankings(self):
+        self.write("a/a")
+        self.write("z/a")
+        self.write("z/b")
+        self.commit()
+        self.write("z/a", "changed")
+        self.commit(env={"GIT_AUTHOR_NAME": "Second", "GIT_AUTHOR_EMAIL": "second@example.test"})
+        for metric in ("authors", "files"):
+            report = self.payload("directories", "--sort", metric, "--limit", "1")
+            self.assertEqual(report["directories"][0]["path"], "z")
+            self.assertEqual(report["directories"][0][metric], 2)

@@ -303,8 +303,8 @@ def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sor
     positive_count(depth, "depth")
     positive_count(limit, "limit")
     positive_count(min_commits, "min_commits")
-    if sort not in {"churn", "commits", "path"}:
-        raise GitError("directory sort must be churn, commits, or path")
+    if sort not in {"churn", "commits", "authors", "files", "path"}:
+        raise GitError("directory sort must be churn, commits, authors, files, or path")
     groups: dict[str, dict[str, Any]] = {}
     for commit in history.commits:
         touched = set()
