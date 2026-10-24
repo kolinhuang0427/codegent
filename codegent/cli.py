@@ -247,7 +247,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     directories.add_argument("--depth", type=positive_int, default=1)
     directories.add_argument("--min-commits", type=positive_int, default=1, help="Minimum commits touching a directory after exclusions")
     directories.add_argument("--limit", type=positive_int, default=20)
-    directories.add_argument("--sort", choices=("churn", "commits", "path"), default="churn")
+    directories.add_argument("--sort", choices=("churn", "commits", "authors", "files", "path"), default="churn")
     directories.set_defaults(handler=_cmd_directories)
 
     inventory = subparsers.add_parser("inventory", parents=[common], help="Summarize committed object sizes by extension or directory")
