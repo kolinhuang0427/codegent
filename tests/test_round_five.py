@@ -174,3 +174,13 @@ class MaintainerRefinements(RepositoryCase):
         report = self.payload("files", "--sort", "extension")
         self.assertEqual([r["path"] for r in report["files"]], ["README", "a.py", "z.PY", "b.txt"])
         self.assertEqual(self.payload("files", "--sort", "extension", "--limit", "2")["matching_files"], 4)
+
+    def test_files_reverse_applies_before_limit_and_preserves_totals(self):
+        for path, text in (("a", "1"), ("b", "22"), ("c", "333")):
+            self.write(path, text)
+        self.commit()
+        report = self.payload("files", "--reverse", "--limit", "1")
+        self.assertEqual(report["files"][0]["path"], "c")
+        self.assertTrue(report["reverse"])
+        self.assertEqual(report["total_bytes"], 6)
+        self.assertEqual(self.payload("files", "--sort", "size", "--reverse", "--limit", "1")["files"][0]["path"], "a")
