@@ -299,9 +299,10 @@ def render_patch(report: dict[str, Any]) -> str:
     return title + "\n" + (content or "No changes.\n")
 
 
-def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sort: str = "churn", excludes: list[str] | None = None) -> dict[str, Any]:
+def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sort: str = "churn", excludes: list[str] | None = None, min_commits: int = 1) -> dict[str, Any]:
     positive_count(depth, "depth")
     positive_count(limit, "limit")
+    positive_count(min_commits, "min_commits")
     if sort not in {"churn", "commits", "path"}:
         raise GitError("directory sort must be churn, commits, or path")
     groups: dict[str, dict[str, Any]] = {}
@@ -325,11 +326,11 @@ def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sor
         row["authors"] = len(row["authors"])
         row["files"] = len(row["files"])
         row["churn"] = row["additions"] + row["deletions"]
-    rows = sorted(groups.values(), key=lambda row: (0 if sort == "path" else -row[sort], row["path"]))
+    rows = sorted((row for row in groups.values() if row["commits"] >= min_commits), key=lambda row: (0 if sort == "path" else -row[sort], row["path"]))
     return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "selection": history.selection, "warnings": history.warnings,
             "history_complete": history.history_complete, "scanned_commits": len(history.commits),
-            "depth": depth, "sort": sort, "excludes": excludes or [], "total_directories": len(rows), "directories": rows[:limit],
+            "depth": depth, "sort": sort, "excludes": excludes or [], "min_commits": min_commits, "matching_directories": len(rows), "total_directories": len(groups), "directories": rows[:limit],
             "path_policy": "root-relative historical destination paths; renamed names are not unified"}
 
 
@@ -337,7 +338,7 @@ def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sor
 def render_directories(report: dict[str, Any]) -> str:
     lines = [f"Directory activity: {report['path']}", "Commits  Churn  Files  Authors  Directory"]
     lines.extend(f"{r['commits']:7}  {r['churn']:5}  {r['files']:5}  {r['authors']:7}  {r['path']}" for r in report["directories"])
-    lines.append(f"Showing {len(report['directories'])} of {report['total_directories']} directories")
+    lines.append(f"Showing {len(report['directories'])} of {report['matching_directories']} matching directories ({report['total_directories']} before threshold)")
     lines.extend(f"Warning: {w}" for w in report["warnings"])
     lines.append(report["path_policy"])
     return "\n".join(lines) + "\n"
