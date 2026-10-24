@@ -59,7 +59,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
     elif command == "directories":
         lines += _table(["Directory", "Commits", "Authors", "Files", "Churn"], [
             [row[key] for key in ("path", "commits", "authors", "files", "churn")] for row in report["directories"]])
-        lines += ["", f"Showing {len(report['directories'])} of {report['total_directories']} directories.", _cell(report["path_policy"])]
+        lines += ["", f"Showing {len(report['directories'])} of {report['matching_directories']} matching directories ({report['total_directories']} before threshold).", _cell(report["path_policy"])]
     elif command == "owners":
         lines += [f"Selected lines: {report['selected_lines']} of {report['file_lines']}; range: {_cell(report['line_range'] or 'whole file')}.", ""]
         keys = ["author", "lines", "percentage"] + (["commit"] if report["group_by"] == "commit" else [])

@@ -113,3 +113,15 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["total_directories"], 1)
         self.assertEqual(report["directories"][0]["churn"], 1)
         self.assertEqual(report["directories"][0]["files"], 1)
+
+    def test_directory_minimum_commits_precedes_limit(self):
+        self.write("busy/a")
+        self.write("once/a")
+        self.commit()
+        self.write("busy/a", "changed")
+        self.commit()
+        report = self.payload("directories", "--min-commits", "2", "--limit", "1")
+        self.assertEqual(report["total_directories"], 2)
+        self.assertEqual(report["matching_directories"], 1)
+        self.assertEqual(report["directories"][0]["path"], "busy")
+        self.assertIn("matching directories", self.cli("directories", "--min-commits", "2", "--markdown").stdout)
