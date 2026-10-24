@@ -159,6 +159,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     hotspots.add_argument("--exclude", action="append", default=[], help="Exclude a root-relative path glob (repeatable)")
     hotspots.add_argument("--sort", choices=("churn", "commits", "authors", "recent"), default="churn")
     hotspots.add_argument("--limit", type=positive_int, default=20)
+    hotspots.add_argument("--min-churn", type=nonnegative_int, default=0, help="Minimum observed additions plus deletions")
     hotspots.add_argument("--min-commits", type=positive_int, default=1)
     hotspots.set_defaults(handler=_cmd_hotspots)
 
@@ -462,7 +463,7 @@ def _cmd_hotspots(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     current_paths = None
     if args.current_only:
         current_paths = set(tracer.git(["ls-tree", "-r", "--name-only", "-z", history.resolved_ref]).split("\0")) - {""}
-    report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits, excludes=args.exclude, current_paths=current_paths, includes=args.include)
+    report = hotspot_report(history, limit=args.limit, sort=args.sort, min_commits=args.min_commits, excludes=args.exclude, current_paths=current_paths, includes=args.include, min_churn=args.min_churn)
     return report if args.json_output or args.markdown or args.csv_output else render_hotspots(report)
 
 

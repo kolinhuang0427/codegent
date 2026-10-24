@@ -427,3 +427,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `cochange --sort jaccard` ranks shared commits divided by the union of target and companion commits within selected history. `candidate_commits` and `jaccard` are exported; historical names stay separate. `--sort path` sorts alphabetically.
 
 `hotspots --include "src/*" --include "tests/*"` selects historical path globs with OR semantics. Exclusions then remove matches before ranking and limiting.
+
+`hotspots --min-churn 100` keeps paths with at least 100 observed added/deleted text lines. Binary-only changes have no measurable text churn and only match a zero threshold.
