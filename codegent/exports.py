@@ -125,7 +125,7 @@ _CSV_TABLES = {
     "divergence": ("sides", ("side", "ref", "resolved_ref", "unique_commits")),
     "inventory": ("groups", ("group", "entries", "known_bytes", "largest_known_bytes", "unknown_size_entries", "modes")),
     "directories": ("directories", ("path", "commits", "authors", "files", "additions", "deletions", "churn", "binary_changes")),
-    "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
+    "authors": ("authors", ("author", "commits", "additions", "deletions", "churn", "binary_changes", "first_seen", "identities", "last_seen")),
     "hotspots": ("files", ("path", "commits", "authors", "churn", "binary_changes", "first_changed", "last_changed")),
     "cochange": ("files", ("path", "shared_commits", "fraction", "candidate_commits", "jaccard")),
     "files": ("files", ("path", "mode", "type", "size", "object_id")),

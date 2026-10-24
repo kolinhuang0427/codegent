@@ -222,3 +222,14 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual([r["short_name"] for r in blobs["refs"]], ["blob-tag"])
         commits = self.payload("refs", "--object-type", "commit")
         self.assertEqual({r["short_name"] for r in commits["refs"]}, {"main", "light"})
+
+    def test_author_csv_headers_match_for_empty_and_nonempty_reports(self):
+        self.write("a")
+        self.commit()
+        populated = list(csv.reader(io.StringIO(self.cli("authors", "a", "--csv").stdout)))
+        empty = list(csv.reader(io.StringIO(self.cli("authors", "a", "--min-commits", "2", "--csv").stdout)))
+        self.assertEqual(populated[0], empty[0])
+        for key in ("identities", "binary_changes", "first_seen", "last_seen"):
+            self.assertIn(key, empty[0])
+        self.assertEqual(empty[1][0], "false")
+        self.assertEqual(populated[1][0], "true")
