@@ -439,3 +439,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `inventory` accepts the same `--include`, `--exclude`, `--kind`, `--min-bytes` and `--max-bytes` snapshot filters as `files`. Filtering precedes complete group aggregation; reports disclose selected and unfiltered entry counts.
 
 Inventory groups include `largest_known_bytes`: the largest committed blob in the selected group, zero for empty blobs, and null if every entry has unknown size (such as gitlinks).
+
+`files --sort extension` groups paths by case-folded final extension, using the literal root-relative path for ties. Extensionless paths sort first; file limits apply afterward.

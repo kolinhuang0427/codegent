@@ -197,7 +197,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     files = subparsers.add_parser("files", parents=[common], help="List tracked files and object metadata at a commit")
     files.add_argument("path", nargs="?", default=".")
     files.add_argument("--limit", type=positive_int, default=1000)
-    files.add_argument("--sort", choices=("path", "size"), default="path")
+    files.add_argument("--sort", choices=("path", "size", "extension"), default="path")
     files.add_argument("--kind", choices=("all", "file", "executable", "symlink", "submodule"), default="all")
     files.add_argument("--min-bytes", type=nonnegative_int, help="Minimum known blob size (inclusive)")
     files.add_argument("--max-bytes", type=nonnegative_int, help="Maximum known blob size (inclusive)")
