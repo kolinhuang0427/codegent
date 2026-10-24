@@ -37,7 +37,7 @@ def _clusters(text: str):
 
 
 def _cluster_width(cluster: str) -> int:
-    if "\ufe0f" in cluster or "\u20e3" in cluster or any(0x1F000 <= ord(c) <= 0x1FAFF for c in cluster):
+    if "\ufe0f" in cluster or "\u20e3" in cluster or (len(cluster) == 2 and all(0x1F1E6 <= ord(c) <= 0x1F1FF for c in cluster)):
         return 2
     return max((character_width(char) for char in cluster), default=0)
 
