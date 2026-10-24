@@ -13,8 +13,8 @@ from .tracer import iso_date, positive_count, nonnegative_count, GitError
 def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 20, group_by: str = "identity", min_commits: int = 1) -> dict[str, Any]:
     positive_count(limit, "limit")
     positive_count(min_commits, "min_commits")
-    if sort not in {"commits", "churn", "name"}:
-        raise GitError("invalid author sort; choose commits, churn, or name")
+    if sort not in {"commits", "churn", "name", "recent"}:
+        raise GitError("invalid author sort; choose commits, churn, name, or recent")
     if group_by not in {"identity", "email"}:
         raise GitError("author grouping must be identity or email")
     authors: dict[str, dict[str, Any]] = {}
@@ -37,8 +37,10 @@ def author_report(bloodline: Bloodline, *, sort: str = "commits", limit: int = 2
     for row in authors.values():
         row["churn"] = row["additions"] + row["deletions"]
     rows = sorted((row for row in authors.values() if row["commits"] >= min_commits), key=lambda row: (
-        0 if sort == "name" else -row[sort], row["author"].casefold(), row["author"],
+        0 if sort in {"name", "recent"} else -row[sort], row["author"].casefold(), row["author"],
     ))
+    if sort == "recent":
+        rows.sort(key=lambda row: iso_date(row["last_seen"]), reverse=True)
     return {
         "path": bloodline.path, "repo": bloodline.repo, "requested_ref": bloodline.requested_ref, "resolved_ref": bloodline.resolved_ref,
         "history_complete": bloodline.history_complete, "warnings": bloodline.warnings,
