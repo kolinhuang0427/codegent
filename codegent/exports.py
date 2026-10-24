@@ -53,6 +53,7 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
         lines += _table(["Side", "Ref", "Resolved tip", "Unique commits"], [
             [row[key] for key in ("side", "ref", "resolved_ref", "unique_commits")] for row in report["sides"]])
     elif command == "inventory":
+        lines += [f"Entries: {report['total_entries']} selected of {report['unfiltered_entries']} before filters; filters: {_cell(report['filters'])}.", ""]
         lines += _table(["Group", "Entries", "Known bytes", "Unknown sizes"], [
             [row[key] for key in ("group", "entries", "known_bytes", "unknown_size_entries")] for row in report["groups"]])
         lines += ["", f"Showing {len(report['groups'])} of {report['total_groups']} groups.", _cell(report["interpretation"])]

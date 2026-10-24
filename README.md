@@ -435,3 +435,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `directories --min-commits 2` filters aggregated directories before limiting. Exports distinguish all aggregated directories from those matching the threshold.
 
 `directories --sort authors` ranks contributor breadth; `--sort files` ranks distinct historical destination paths. Equal metrics use root-relative directory names as deterministic ties.
+
+`inventory` accepts the same `--include`, `--exclude`, `--kind`, `--min-bytes` and `--max-bytes` snapshot filters as `files`. Filtering precedes complete group aggregation; reports disclose selected and unfiltered entry counts.
