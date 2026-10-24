@@ -219,6 +219,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     doctor.set_defaults(handler=_cmd_doctor)
 
     refs = subparsers.add_parser("refs", parents=[common], help="Browse branch, tag, and remote-tracking references")
+    refs.add_argument("--object-type", choices=("commit", "tag", "tree", "blob"), help="Select the stored ref object type; annotated tags have type tag")
     refs.add_argument("--kind", choices=("all", "branch", "tag", "remote"), default="all")
     refs.add_argument("--limit", type=positive_int, default=1000)
     refs.add_argument("--contains", help="Only refs whose commit history contains this revision")
@@ -513,7 +514,7 @@ def _cmd_doctor(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
 
 
 def _cmd_refs(args: argparse.Namespace, color: bool) -> dict[str, Any] | str:
-    report = _tracer(args).refs(kind=args.kind, limit=args.limit, contains=args.contains, points_at=args.points_at, sort=args.sort, patterns=args.patterns, excludes=args.exclude)
+    report = _tracer(args).refs(kind=args.kind, limit=args.limit, contains=args.contains, points_at=args.points_at, sort=args.sort, patterns=args.patterns, excludes=args.exclude, object_type=args.object_type)
     return report if args.json_output or args.markdown or args.csv_output else render_refs(report)
 
 

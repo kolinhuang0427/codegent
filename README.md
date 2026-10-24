@@ -447,3 +447,5 @@ Inventory groups include `largest_known_bytes`: the largest committed blob in th
 `source PATH --tail 20 --ref REV` previews the last 20 committed lines with original line numbers. It preserves an unterminated last line and clamps to the file length. Tail cannot be combined with a range or context; the blob byte budget still applies.
 
 `refs --match "work/*" --exclude "work/archive/*"` includes and then excludes short reference names before applying `--limit`. Exclusions are repeatable and case-sensitive.
+
+`refs --object-type tag` selects annotated tags by their stored object type. `commit` includes branches and lightweight commit tags; `blob` and `tree` select direct object tags. The peeled type remains separately visible.

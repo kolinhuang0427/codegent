@@ -208,3 +208,17 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["total_refs"], 1)
         self.assertEqual(report["refs"][0]["short_name"], "work/b")
         self.assertFalse(report["truncated"])
+
+    def test_ref_object_type_distinguishes_annotated_and_blob_tags(self):
+        self.write("a")
+        self.commit()
+        self.git("tag", "light")
+        self.git("tag", "-a", "annotated", "-m", "release")
+        self.git("tag", "blob-tag", self.git("rev-parse", "HEAD:a"))
+        annotated = self.payload("refs", "--object-type", "tag")
+        self.assertEqual([r["short_name"] for r in annotated["refs"]], ["annotated"])
+        self.assertEqual(annotated["refs"][0]["peeled_type"], "commit")
+        blobs = self.payload("refs", "--kind", "tag", "--object-type", "blob")
+        self.assertEqual([r["short_name"] for r in blobs["refs"]], ["blob-tag"])
+        commits = self.payload("refs", "--object-type", "commit")
+        self.assertEqual({r["short_name"] for r in commits["refs"]}, {"main", "light"})
