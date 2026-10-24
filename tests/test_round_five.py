@@ -92,3 +92,14 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(report["matching_files"], 2)
         self.assertEqual(report["files"][0]["path"], "src/a.py")
         self.assertEqual(report["includes"], ["src/*", "tests/*"])
+
+    def test_hotspot_churn_threshold_is_inclusive_and_binary_is_unknown(self):
+        self.write("small", "one\n")
+        self.write("large", "one\ntwo\nthree\n")
+        (self.repo / "binary").write_bytes(b"\0data")
+        self.commit()
+        report = self.payload("hotspots", "--min-churn", "3")
+        self.assertEqual([r["path"] for r in report["files"]], ["large"])
+        self.assertEqual(report["min_churn"], 3)
+        self.assertEqual(self.payload("hotspots", "--min-churn", "0")["matching_files"], 3)
+        self.assertEqual(self.cli("hotspots", "--min-churn", "-1").returncode, 2)
