@@ -166,3 +166,11 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(groups[".txt"]["largest_known_bytes"], 0)
         self.assertIsNone(groups["(none)"]["largest_known_bytes"])
         self.assertIn("Largest known bytes", self.cli("inventory", "--markdown").stdout)
+
+    def test_files_extension_sort_is_casefolded_and_path_tied(self):
+        for path in ("z.PY", "a.py", "b.txt", "README"):
+            self.write(path)
+        self.commit()
+        report = self.payload("files", "--sort", "extension")
+        self.assertEqual([r["path"] for r in report["files"]], ["README", "a.py", "z.PY", "b.txt"])
+        self.assertEqual(self.payload("files", "--sort", "extension", "--limit", "2")["matching_files"], 4)

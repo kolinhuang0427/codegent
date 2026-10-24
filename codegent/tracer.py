@@ -445,8 +445,8 @@ class GitTracer:
                 nonnegative_count(bound, name)
         if min_bytes is not None and max_bytes is not None and min_bytes > max_bytes:
             raise GitError("minimum file size must not exceed maximum")
-        if sort not in {"path", "size"}:
-            raise GitError("file sort must be path or size")
+        if sort not in {"path", "size", "extension"}:
+            raise GitError("file sort must be path, size, or extension")
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
         output = self.git(["ls-tree", "-r", "-l", "-z", "--full-tree", resolved, "--", path])
@@ -463,7 +463,10 @@ class GitTracer:
         files = [item for item in files
                  if (not includes or any(fnmatchcase(item["path"], pattern) for pattern in includes))
                  and not any(fnmatchcase(item["path"], pattern) for pattern in (excludes or []))]
-        files.sort(key=lambda item: (item["path"],) if sort == "path" else (item["size"] is None, -(item["size"] or 0), item["path"]))
+        import posixpath
+        files.sort(key=lambda item: (item["path"],) if sort == "path" else
+                   (posixpath.splitext(posixpath.basename(item["path"]))[1].casefold(), item["path"]) if sort == "extension" else
+                   (item["size"] is None, -(item["size"] or 0), item["path"]))
         return {"repo": self.repo, "path": path, "requested_ref": ref, "resolved_ref": resolved,
                 "includes": includes or [], "excludes": excludes or [], "sort": sort, "min_bytes": min_bytes, "max_bytes": max_bytes, "unknown_size_entries": sum(item["size"] is None for item in files),
                 "kind": kind, "total_files": total_files, "matching_files": len(files), "total_bytes": sum(item["size"] or 0 for item in files),
