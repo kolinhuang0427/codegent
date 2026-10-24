@@ -299,7 +299,7 @@ def render_patch(report: dict[str, Any]) -> str:
     return title + "\n" + (content or "No changes.\n")
 
 
-def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sort: str = "churn") -> dict[str, Any]:
+def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sort: str = "churn", excludes: list[str] | None = None) -> dict[str, Any]:
     positive_count(depth, "depth")
     positive_count(limit, "limit")
     if sort not in {"churn", "commits", "path"}:
@@ -308,6 +308,8 @@ def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sor
     for commit in history.commits:
         touched = set()
         for change in commit.changes:
+            if any(fnmatchcase(change["path"], pattern) for pattern in (excludes or [])):
+                continue
             parent = "/".join(change["path"].split("/")[:-1][:depth]) or "."
             row = groups.setdefault(parent, {"path": parent, "commits": 0, "authors": set(), "files": set(),
                                              "additions": 0, "deletions": 0, "binary_changes": 0})
@@ -327,7 +329,7 @@ def directory_report(history: Bloodline, *, depth: int = 1, limit: int = 20, sor
     return {"repo": history.repo, "path": history.path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "selection": history.selection, "warnings": history.warnings,
             "history_complete": history.history_complete, "scanned_commits": len(history.commits),
-            "depth": depth, "sort": sort, "total_directories": len(rows), "directories": rows[:limit],
+            "depth": depth, "sort": sort, "excludes": excludes or [], "total_directories": len(rows), "directories": rows[:limit],
             "path_policy": "root-relative historical destination paths; renamed names are not unified"}
 
 

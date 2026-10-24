@@ -429,3 +429,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `hotspots --include "src/*" --include "tests/*"` selects historical path globs with OR semantics. Exclusions then remove matches before ranking and limiting.
 
 `hotspots --min-churn 100` keeps paths with at least 100 observed added/deleted text lines. Binary-only changes have no measurable text churn and only match a zero threshold.
+
+`directories --exclude "src/generated/*"` removes historical destination file paths before directory aggregation, including their churn, authors and touched-commit contribution.
