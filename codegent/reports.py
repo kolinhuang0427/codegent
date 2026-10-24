@@ -196,12 +196,18 @@ def render_timeline(report: dict[str, Any]) -> str:
     return "\n".join(lines) + "\n"
 
 
-def cochange_report(history: Bloodline, path: str, *, limit: int = 20, min_shared: int = 1, excludes: list[str] | None = None, min_fraction: float = 0) -> dict[str, Any]:
+def cochange_report(history: Bloodline, path: str, *, limit: int = 20, min_shared: int = 1, excludes: list[str] | None = None, min_fraction: float = 0, sort: str = "shared") -> dict[str, Any]:
     positive_count(limit, "limit")
     positive_count(min_shared, "min_shared")
     import math
     if isinstance(min_fraction, bool) or not isinstance(min_fraction, (int, float)) or not math.isfinite(min_fraction) or not 0 <= min_fraction <= 1:
         raise GitError("minimum cochange fraction must be finite and between 0 and 1")
+    if sort not in {"shared", "jaccard", "path"}:
+        raise GitError("cochange sort must be shared, jaccard, or path")
+    candidate_commits: dict[str, int] = {}
+    for commit in history.commits:
+        for candidate in {item["path"] for item in commit.changes}:
+            candidate_commits[candidate] = candidate_commits.get(candidate, 0) + 1
     counts: dict[str, int] = {}
     target_commits = 0
     for commit in history.commits:
@@ -214,21 +220,24 @@ def cochange_report(history: Bloodline, path: str, *, limit: int = 20, min_share
         companions = {item["path"] for item in commit.changes if not matches(item)}
         for companion in companions:
             counts[companion] = counts.get(companion, 0) + 1
-    rows = [{"path": candidate, "shared_commits": count, "fraction": round(count / target_commits, 4)}
+    rows = [{"path": candidate, "shared_commits": count, "fraction": round(count / target_commits, 4),
+             "candidate_commits": candidate_commits[candidate],
+             "jaccard": round(count / (target_commits + candidate_commits[candidate] - count), 4)}
             for candidate, count in counts.items() if count >= min_shared and count / target_commits >= min_fraction
             and not any(fnmatchcase(candidate, pattern) for pattern in (excludes or []))]
-    rows.sort(key=lambda row: (-row["shared_commits"], row["path"]))
+    rows.sort(key=lambda row: (0 if sort == "path" else
+                              -(row["shared_commits"] / (target_commits + row["candidate_commits"] - row["shared_commits"]) if sort == "jaccard" else row["shared_commits"]), row["path"]))
     return {"repo": history.repo, "path": path, "requested_ref": history.requested_ref,
             "resolved_ref": history.resolved_ref, "history_complete": history.history_complete,
             "selection": history.selection, "warnings": history.warnings, "target_commits": target_commits,
-            "scanned_commits": len(history.commits), "min_fraction": min_fraction, "min_shared": min_shared, "excludes": excludes or [], "matching_files": len(rows), "files": rows[:limit],
+            "scanned_commits": len(history.commits), "sort": sort, "min_fraction": min_fraction, "min_shared": min_shared, "excludes": excludes or [], "matching_files": len(rows), "files": rows[:limit],
             "interpretation": "same-commit co-occurrence, not a dependency or causal relationship"}
 
 
 @safe_display
 def render_cochange(report: dict[str, Any]) -> str:
-    lines = [f"Files changed with: {report['path']} ({report['target_commits']} target commits)", "Shared  Fraction  Path"]
-    lines.extend(f"{row['shared_commits']:6}  {row['fraction']:8.4f}  {row['path']}" for row in report["files"])
+    lines = [f"Files changed with: {report['path']} ({report['target_commits']} target commits)", "Shared  Fraction  Jaccard  Path"]
+    lines.extend(f"{row['shared_commits']:6}  {row['fraction']:8.4f}  {row['jaccard']:7.4f}  {row['path']}" for row in report["files"])
     lines.extend(f"Warning: {warning}" for warning in report["warnings"])
     lines.append(report["interpretation"])
     return "\n".join(lines) + "\n"

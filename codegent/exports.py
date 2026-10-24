@@ -86,8 +86,8 @@ def render_markdown(report: dict[str, Any], command: str) -> str:
             [row[key] for key in ("path", "mode", "type", "size", "object_id")] for row in report["files"]])
         lines += ["", f"Showing {len(report['files'])} of {report['matching_files']} matching entries ({report['total_files']} before filters)."]
     elif command == "cochange":
-        lines += _table(["Path", "Shared commits", "Fraction"], [
-            [row[key] for key in ("path", "shared_commits", "fraction")] for row in report["files"]])
+        lines += _table(["Path", "Shared commits", "Fraction", "Jaccard"], [
+            [row[key] for key in ("path", "shared_commits", "fraction", "jaccard")] for row in report["files"]])
         lines += ["", f"Target commits: {report['target_commits']}; showing {len(report['files'])} "
                   f"of {report['matching_files']} matching paths.", _cell(report["interpretation"])]
     elif command == "timeline":
@@ -126,7 +126,7 @@ _CSV_TABLES = {
     "directories": ("directories", ("path", "commits", "authors", "files", "additions", "deletions", "churn", "binary_changes")),
     "authors": ("authors", ("author", "commits", "additions", "deletions", "churn")),
     "hotspots": ("files", ("path", "commits", "authors", "churn", "binary_changes", "first_changed", "last_changed")),
-    "cochange": ("files", ("path", "shared_commits", "fraction")),
+    "cochange": ("files", ("path", "shared_commits", "fraction", "candidate_commits", "jaccard")),
     "files": ("files", ("path", "mode", "type", "size", "object_id")),
     "refs": ("refs", ("ref", "kind", "object_type", "object_id", "peeled_object_id", "peeled_type")),
     "owners": ("owners", ("author", "lines", "percentage", "boundary_lines", "commits", "commit")),
