@@ -423,3 +423,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 `cochange --exclude "generated/*"` removes companion paths before limiting results while keeping the selected target-commit denominator. Repeat exclusions as needed.
 
 `cochange --min-fraction 0.5` keeps paths shared in at least half the selected target commits. Threshold comparison uses the unrounded fraction; `--min-shared` still applies.
+
+`cochange --sort jaccard` ranks shared commits divided by the union of target and companion commits within selected history. `candidate_commits` and `jaccard` are exported; historical names stay separate. `--sort path` sorts alphabetically.

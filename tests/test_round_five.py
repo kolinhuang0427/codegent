@@ -70,3 +70,16 @@ class MaintainerRefinements(RepositoryCase):
         self.assertEqual(self.payload("cochange", "target", "--min-fraction", "0.50001")["matching_files"], 0)
         for value in ("nan", "inf", "-0.1", "1.1"):
             self.assertEqual(self.cli("cochange", "target", "--min-fraction", value).returncode, 2)
+
+    def test_jaccard_discounts_frequently_changed_companions(self):
+        for path in ("target", "a-busy", "z-focused"):
+            self.write(path)
+        self.commit()
+        self.write("a-busy", "unrelated edit")
+        self.commit()
+        report = self.payload("cochange", "target", "--sort", "jaccard")
+        self.assertEqual([r["path"] for r in report["files"]], ["z-focused", "a-busy"])
+        self.assertEqual([r["jaccard"] for r in report["files"]], [1, 0.5])
+        self.assertEqual(report["files"][1]["candidate_commits"], 2)
+        for fmt in ("--markdown", "--csv", "--no-color"):
+            self.assertIn("jaccard", self.cli("cochange", "target", fmt).stdout.lower())
