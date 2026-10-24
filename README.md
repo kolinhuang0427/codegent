@@ -415,3 +415,5 @@ Terminal rendering preserves structural diff-stat line breaks, labels incomplete
 Terminal layout measures neutral supplementary symbols by Unicode cell width while retaining two-cell regional flag pairs.
 
 Standalone skin-tone modifiers after ordinary text occupy their own terminal cells; supported emoji modifier sequences remain intact.
+
+Explicit empty `--lines ""` values are errors for `source` and `owners`; omit the option to select the whole file.

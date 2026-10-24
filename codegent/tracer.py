@@ -526,7 +526,7 @@ class GitTracer:
     def source(self, path: str, ref: str = "HEAD", *, lines: str | None = None, max_bytes: int = 1048576, context: int = 0) -> dict[str, Any]:
         positive_count(max_bytes, "max_bytes")
         nonnegative_count(context, "context")
-        if context and not lines:
+        if context and lines is None:
             raise GitError("source context requires --lines")
         path = self.normalize_path(path)
         resolved = self.resolve_ref(ref)
@@ -536,7 +536,7 @@ class GitTracer:
         if parts[-1]:
             file_lines.append(parts[-1])
         start, end = 1, len(file_lines)
-        if lines:
+        if lines is not None:
             match = re.fullmatch(r"([1-9][0-9]*):([1-9][0-9]*)", lines)
             if not match:
                 raise GitError("--lines must be START:END with positive line numbers")
@@ -574,7 +574,7 @@ class GitTracer:
             args.append(f"--ignore-revs-file={ignored_file}")
         if self.ignore_whitespace:
             args.append("-w")
-        if lines:
+        if lines is not None:
             match = re.fullmatch(r"([1-9][0-9]*):([1-9][0-9]*)", lines)
             if not match:
                 raise GitError("--lines must be START:END with positive line numbers")

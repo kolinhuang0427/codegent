@@ -30,3 +30,12 @@ class MaintainerRefinements(RepositoryCase):
         result = self.cli("trace", "a", "--no-color")
         rows = [line for line in result.stdout.splitlines() if line.startswith(("  ╭", "  │", "  ╰"))]
         self.assertEqual(len({display_width(line) for line in rows}), 1)
+
+    def test_empty_line_ranges_are_rejected_instead_of_selecting_whole_file(self):
+        self.write("a")
+        self.commit()
+        for command in ("source", "owners"):
+            result = self.cli(command, "a", "--lines", "", "--json")
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("START:END", json.loads(result.stderr)["error"])
+            self.assertEqual(self.payload(command, "a")["file_lines"], 3)
