@@ -41,6 +41,14 @@ def positive_int(value: str) -> int:
     return number
 
 
+def unit_fraction(value: str) -> float:
+    import math
+    number = float(value)
+    if not math.isfinite(number) or not 0 <= number <= 1:
+        raise argparse.ArgumentTypeError("must be a finite fraction between 0 and 1")
+    return number
+
+
 def _stream_text(message: str, stream) -> str:
     encoding = getattr(stream, "encoding", None) or "utf-8"
     return message.encode(encoding, "backslashreplace").decode(encoding)
@@ -179,6 +187,7 @@ def build_parser(*, json_errors: bool = False) -> argparse.ArgumentParser:
     cochange.add_argument("path")
     cochange.add_argument("--limit", type=positive_int, default=20)
     cochange.add_argument("--exclude", action="append", default=[], help="Exclude companion path globs (repeatable)")
+    cochange.add_argument("--min-fraction", type=unit_fraction, default=0, help="Minimum fraction of target commits shared with a companion (0-1)")
     cochange.add_argument("--min-shared", type=positive_int, default=1)
     cochange.set_defaults(handler=_cmd_cochange)
 
@@ -470,7 +479,7 @@ def _cmd_cochange(args: argparse.Namespace, color: bool) -> dict[str, Any] | str
     tracer = _tracer(args)
     path = tracer.normalize_path(args.path)
     history = tracer.repository_history(tracer.root(), args.ref, **_history_options(args))
-    report = cochange_report(history, path, limit=args.limit, min_shared=args.min_shared, excludes=args.exclude)
+    report = cochange_report(history, path, limit=args.limit, min_shared=args.min_shared, excludes=args.exclude, min_fraction=args.min_fraction)
     return report if args.json_output or args.markdown or args.csv_output else render_cochange(report)
 
 
