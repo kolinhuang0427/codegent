@@ -441,3 +441,5 @@ Explicit empty `--lines ""` values are errors for `source` and `owners`; omit th
 Inventory groups include `largest_known_bytes`: the largest committed blob in the selected group, zero for empty blobs, and null if every entry has unknown size (such as gitlinks).
 
 `files --sort extension` groups paths by case-folded final extension, using the literal root-relative path for ties. Extensionless paths sort first; file limits apply afterward.
+
+`files --reverse` reverses the complete selected ordering (including ties and unknown-size placement) before applying `--limit`. With `--sort size`, this puts the smallest known blobs last only in default descending order; reversed order is the exact inverse.
