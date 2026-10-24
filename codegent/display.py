@@ -19,6 +19,26 @@ def _emoji(char: str) -> bool:
     return 0x1F000 <= ord(char) <= 0x1FAFF or 0x2600 <= ord(char) <= 0x27BF
 
 
+# Unicode 17 Emoji_Modifier_Base; https://www.unicode.org/Public/17.0.0/ucd/emoji/emoji-data.txt
+_MODIFIER_BASES = (
+    (0x261D, 0x261D), (0x26F9, 0x26F9), (0x270A, 0x270D), (0x1F385, 0x1F385),
+    (0x1F3C2, 0x1F3C4), (0x1F3C7, 0x1F3C7), (0x1F3CA, 0x1F3CC), (0x1F442, 0x1F443),
+    (0x1F446, 0x1F450), (0x1F466, 0x1F478), (0x1F47C, 0x1F47C), (0x1F481, 0x1F483),
+    (0x1F485, 0x1F487), (0x1F48F, 0x1F48F), (0x1F491, 0x1F491), (0x1F4AA, 0x1F4AA),
+    (0x1F574, 0x1F575), (0x1F57A, 0x1F57A), (0x1F590, 0x1F590), (0x1F595, 0x1F596),
+    (0x1F645, 0x1F647), (0x1F64B, 0x1F64F), (0x1F6A3, 0x1F6A3), (0x1F6B4, 0x1F6B6),
+    (0x1F6C0, 0x1F6C0), (0x1F6CC, 0x1F6CC), (0x1F90C, 0x1F90C), (0x1F90F, 0x1F90F),
+    (0x1F918, 0x1F91F), (0x1F926, 0x1F926), (0x1F930, 0x1F939), (0x1F93C, 0x1F93E),
+    (0x1F977, 0x1F977), (0x1F9B5, 0x1F9B6), (0x1F9B8, 0x1F9B9), (0x1F9BB, 0x1F9BB),
+    (0x1F9CD, 0x1F9CF), (0x1F9D1, 0x1F9DD), (0x1FAC3, 0x1FAC5), (0x1FAF0, 0x1FAF8),
+)
+
+
+def _modifier_base(cluster: str) -> bool:
+    base = cluster.rstrip("\ufe0f")[-1:]
+    return bool(base) and any(start <= ord(base) <= end for start, end in _MODIFIER_BASES)
+
+
 def _clusters(text: str):
     """Keep common terminal emoji/combining sequences intact without dependencies."""
     cluster = ""
@@ -26,7 +46,7 @@ def _clusters(text: str):
         regional_pair = (len(cluster) == 1 and 0x1F1E6 <= ord(cluster) <= 0x1F1FF
                          and 0x1F1E6 <= ord(char) <= 0x1F1FF)
         extend = (unicodedata.category(char) in {"Mn", "Me"} or char == "\u200d"
-                  or 0x1F3FB <= ord(char) <= 0x1F3FF or regional_pair
+                  or (0x1F3FB <= ord(char) <= 0x1F3FF and _modifier_base(cluster)) or regional_pair
                   or (cluster.endswith("\u200d") and _emoji(char) and any(_emoji(c) for c in cluster)))
         if cluster and not extend:
             yield cluster
