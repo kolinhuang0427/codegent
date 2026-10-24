@@ -411,3 +411,5 @@ Source and blame reject files marked binary by the selected revision's attribute
 File history now establishes rename-followed lineage before applying author, message, date, or merge selection, preserving matching commits before an excluded rename. Commit limits bound selected results; filtered follow traversal may inspect older history and remains subject to the Git timeout. Explicit empty dates and conflicting positional/named refs are rejected. Git process cleanup also runs on interruption; Windows cleanup avoids blocking on active buffered readers.
 
 Terminal rendering preserves structural diff-stat line breaks, labels incomplete-history boundaries distinctly, and escapes directional marks alongside bidi overrides. Cell-width and truncation logic keeps common combining, emoji-presentation, modifier, flag, keycap, and joined-emoji sequences intact. Terminal font and Unicode-version differences can still affect display width.
+
+Terminal layout measures neutral supplementary symbols by Unicode cell width while retaining two-cell regional flag pairs.
